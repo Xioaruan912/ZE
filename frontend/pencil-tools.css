@@ -1,0 +1,20 @@
+/* Tablet Pencil dock: no selectors alter ordinary desktop or phone layout. */
+#pencil-dock{flex:none;display:flex;flex-direction:column;gap:3px;padding:6px max(8px,env(safe-area-inset-right,0px)) max(4px,env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px));background:#fff;border-top:1px solid var(--ze-border);position:relative;z-index:4}
+#pencil-dock .pencil-buttons{display:flex;align-items:center;justify-content:center;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;min-height:44px}
+#pencil-dock .pencil-modes{display:flex;flex:none;gap:2px;padding:2px;background:#edf1f6;border-radius:8px}
+#pencil-dock button,#pencil-dock select{height:44px;min-height:44px;min-width:44px;flex:none;padding:6px 10px;margin:0;border:1px solid var(--ze-control);border-radius:6px;background:#fff;color:var(--ze-ink);font:14px var(--ze-font);white-space:nowrap;touch-action:manipulation}
+#pencil-dock select{font-size:16px;width:84px}
+#pencil-dock .pencil-modes button{border:0;background:transparent}
+#pencil-dock button[aria-pressed=true]{background:var(--ze-accent);color:#fff;box-shadow:0 1px 4px #235dd82b}
+#pencil-dock button:disabled,#pencil-dock select:disabled{opacity:.4}
+#pencil-hint{min-height:16px;text-align:center;font-size:11px;color:var(--ze-muted);line-height:1.4}
+#pencil-hint.pencil-error{color:#a52832}
+html[data-ze-pencil-ui] #document.pencil-writing .textLayer{user-select:none!important;-webkit-user-select:none!important;-webkit-touch-callout:none;touch-action:pan-x pan-y pinch-zoom!important;cursor:crosshair}
+.handwriting-layer,.pencil-preview{position:absolute;inset:0;overflow:visible;pointer-events:none;fill:none}
+.pencil-preview{z-index:4}
+.annotation-type.is-ink{border:0!important}
+#selection-actions .ink-only{display:none}
+#selection-actions[data-annotation-kind=ink] .ink-only{display:block}
+#selection-actions[data-annotation-kind=ink] .color-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0}
+@media(max-width:600px){#pencil-dock .pencil-buttons{justify-content:flex-start;gap:4px}#pencil-dock button{padding-inline:8px}#pencil-dock select{width:76px}}
+@media(max-height:500px){#pencil-dock{padding-top:3px;gap:0}#pencil-hint{display:none}}

@@ -1,0 +1,72 @@
+/* Every override requires touch layout. Fine-pointer desktop keeps its UI. */
+html[data-ze-touch-ui]{--ze-touch-header:62px;-webkit-tap-highlight-color:rgba(35,93,216,.13)}
+html[data-ze-touch-ui] header{height:calc(var(--ze-touch-header) + env(safe-area-inset-top,0px));padding-top:env(safe-area-inset-top,0px);padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px));gap:6px}
+html[data-ze-touch-ui] header button{min-height:44px;min-width:44px;padding:7px 6px}
+html[data-ze-touch-ui] header #menu{width:44px;padding:8px}
+html[data-ze-touch-ui] main{height:calc(100dvh - var(--ze-touch-header) - env(safe-area-inset-top,0px) - var(--zotero-notice-height,0px));padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+html[data-ze-touch-ui] .workspace{border-radius:0}
+html[data-ze-touch-ui] .toolbar{display:block;flex:none;min-height:0;padding:4px 6px}
+html[data-ze-touch-ui] .toolbar>#back,html[data-ze-touch-ui] .toolbar>.paper-title{display:none!important}
+html[data-ze-touch-ui] .touch-primary{display:grid;grid-template-columns:44px minmax(0,1fr) 48px;align-items:center;gap:4px;margin-bottom:4px}
+html[data-ze-touch-ui] .touch-pagination{display:flex;align-items:center;justify-content:center;gap:4px;min-width:0}
+html[data-ze-touch-ui] .touch-primary label{display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}
+html[data-ze-touch-ui] .toolbar :is(button,input,select){height:44px!important;min-height:44px!important;min-width:44px!important;flex:none;margin:0;touch-action:manipulation}
+html[data-ze-touch-ui] .toolbar #page{width:52px;font-size:16px;padding:4px 2px}
+html[data-ze-touch-ui] .toolbar #show-notes,html[data-ze-touch-ui] .toolbar #show-navigation{font-size:14px;padding:4px}
+html[data-ze-touch-ui] .touch-tools-frame{height:44px;position:relative;min-width:0}
+html[data-ze-touch-ui] #touch-tools{display:flex;align-items:center;gap:6px;height:44px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:none;padding-right:24px;scroll-padding:6px;-webkit-overflow-scrolling:touch}
+html[data-ze-touch-ui] #touch-tools::-webkit-scrollbar{display:none}
+html[data-ze-touch-ui] .touch-tools-cue{display:none;position:absolute;right:-1px;top:0;width:22px;height:44px;place-items:center;background:linear-gradient(90deg,#fff0,#fff 45%);color:var(--ze-accent);pointer-events:none;font-size:24px}
+html[data-ze-touch-ui] .touch-tools-frame.can-scroll-next .touch-tools-cue{display:grid}
+html[data-ze-touch-ui] .toolbar select{font-size:16px;max-width:none;padding:5px 6px}
+html[data-ze-touch-ui] #mark-tool{width:112px}
+html[data-ze-touch-ui] #tool-color{width:76px}
+html[data-ze-touch-ui] #zoom-mode{width:116px}
+html[data-ze-touch-ui] .toolbar #touch-select{display:block;min-width:76px!important;font-size:14px;padding:5px 8px}
+html[data-ze-touch-ui] #zoom-value{font-size:12px;min-width:36px}
+html[data-ze-touch-ui] #reading-tabs{min-height:49px;overscroll-behavior-x:contain}
+html[data-ze-touch-ui] .reading-tab{max-width:240px}
+html[data-ze-touch-ui] .reading-tab button{min-height:44px;font-size:13px}
+html[data-ze-touch-ui] .reading-tab .tab-close{min-width:44px;font-size:21px;padding:4px}
+html[data-ze-touch-ui] #document{padding:10px 5px max(10px,env(safe-area-inset-bottom,0px))}
+html[data-ze-touch-ui] #document.finger-select .textLayer{touch-action:pinch-zoom}
+html[data-ze-touch-ui] #library.library-component,html[data-ze-touch-ui] #panel{position:fixed;top:max(calc(var(--ze-touch-header) + env(safe-area-inset-top,0px) + var(--zotero-notice-height,0px)),var(--ze-touch-view-top,0px));bottom:max(0px,calc(100dvh - var(--ze-touch-view-bottom,100dvh)));max-height:none;width:min(88vw,360px);overscroll-behavior:contain;padding-bottom:max(12px,env(safe-area-inset-bottom,0px));box-shadow:var(--ze-shadow)}
+html[data-ze-touch-ui] #library.library-component{left:env(safe-area-inset-left,0px);z-index:10;display:none;padding:12px 12px max(12px,env(safe-area-inset-bottom,0px))}
+html[data-ze-touch-ui] #library.open{display:flex}
+html[data-ze-touch-ui] #panel{right:env(safe-area-inset-right,0px);z-index:12;padding:12px 16px max(16px,env(safe-area-inset-bottom,0px))}
+html[data-ze-touch-ui] #touch-backdrop{position:fixed;inset:calc(var(--ze-touch-header) + env(safe-area-inset-top,0px) + var(--zotero-notice-height,0px)) 0 0;z-index:9;background:#17212e38;border:0;border-radius:0;touch-action:none}
+html[data-ze-touch-ui] #library .library-heading{min-height:44px;margin:0 2px 8px}
+html[data-ze-touch-ui] #library .library-origin{display:none}
+html[data-ze-touch-ui] #close-touch-library{height:44px;width:44px;flex:none;border:0;border-radius:6px;color:var(--ze-muted);background:transparent;font-size:26px;line-height:1;padding:4px}
+html[data-ze-touch-ui] #library .library-search{margin-bottom:8px}
+html[data-ze-touch-ui] #library.library-component #search{height:44px;font-size:16px;padding-right:46px}
+html[data-ze-touch-ui] #clear-library-search{top:0;right:0;width:44px;height:44px}
+html[data-ze-touch-ui] #library-scope{min-height:44px;font-size:15px}
+html[data-ze-touch-ui] .library-list-heading{min-height:32px;font-size:12px}
+html[data-ze-touch-ui] #reset-library-search{min-height:32px;min-width:56px;font-size:12px}
+html[data-ze-touch-ui] #library .item strong{font-size:14px}
+html[data-ze-touch-ui] #library .item small{font-size:12px}
+html[data-ze-touch-ui] #collection-picker{top:var(--ze-touch-picker-top,180px);max-height:var(--ze-touch-picker-max,55dvh);left:10px;right:10px}
+html[data-ze-touch-ui] #library .tree-toggle,html[data-ze-touch-ui] #close-collection-picker{width:44px;min-width:44px;height:44px;min-height:44px}
+html[data-ze-touch-ui] #library .tree-folder,html[data-ze-touch-ui] #library .tree-all{min-height:44px;font-size:14px}
+html[data-ze-touch-ui] #panel :is(input:not([type=checkbox]),select,textarea){font-size:16px;min-height:44px}
+html[data-ze-touch-ui] #panel :is(button,.plan-heading){min-height:44px}
+html[data-ze-touch-ui] #panel .panel-title{position:sticky;top:-12px;z-index:1;background:#fff;margin:0 -2px;padding:2px}
+html[data-ze-touch-ui] #panel .panel-title h2{margin:8px 0;font-size:17px}
+html[data-ze-touch-ui] #panel .panel-title button{min-width:44px}
+html[data-ze-touch-ui] .plan-heading input{width:22px;height:22px;flex:none;margin-top:1px}
+html[data-ze-touch-ui] .plan-heading{align-items:center}
+html[data-ze-touch-ui] .note-actions{flex-wrap:wrap}
+html[data-ze-touch-ui] #selection-actions.reader-popover,html[data-ze-touch-ui] #selection-actions[data-mode=annotation]{width:min(376px,calc(100vw - 16px))}
+html[data-ze-touch-ui] #selection-actions .swatch{height:44px!important}
+html[data-ze-touch-ui] #selection-actions .selection-buttons button{height:44px;min-width:44px}
+html[data-ze-touch-ui] #selection-actions :is(textarea,input,select){font-size:16px}
+html[data-ze-touch-ui] #selection-actions #translation-service{height:44px;font-size:16px;max-width:128px}
+html[data-ze-touch-ui] #selection-actions #annotation-actions button{min-height:44px}
+html[data-ze-touch-ui] #selection-actions .tag-chip,html[data-ze-touch-ui] #selection-actions #annotation-tag-presets button{min-width:44px;min-height:44px;font-size:13px;padding:5px 7px}
+html[data-ze-touch-ui] #selection-actions #annotation-tag-input{height:44px;font-size:16px}
+html[data-ze-touch-ui] #toast{bottom:max(16px,env(safe-area-inset-bottom,0px),calc(100dvh - var(--ze-touch-view-bottom,100dvh) + 16px));max-width:calc(100vw - 24px);font-size:13px}
+@media(max-width:760px){html[data-ze-touch-ui]{--ze-touch-header:52px}html[data-ze-touch-ui] header #status{display:none}html[data-ze-touch-ui] header button{font-size:12px}html[data-ze-touch-ui] header strong{min-width:30px;font-size:25px}}
+@media(max-width:389px){html[data-ze-touch-ui] #selection-actions .color-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0}html[data-ze-touch-ui] header{gap:3px}html[data-ze-touch-ui] header button{padding-inline:4px}}
+@media(min-width:1024px),(min-width:761px) and (max-height:500px){html[data-ze-touch-ui] .toolbar{display:flex;align-items:center;gap:10px}html[data-ze-touch-ui] .touch-primary{flex:0 0 276px;margin-bottom:0}html[data-ze-touch-ui] .touch-tools-frame{flex:1;min-width:0}}
+@media(max-height:500px){html[data-ze-touch-ui] #library.library-component{padding-top:8px}html[data-ze-touch-ui] #library .library-heading{min-height:0;height:0;margin:0}html[data-ze-touch-ui] #library .library-heading h1{display:none}html[data-ze-touch-ui] #close-touch-library{position:absolute;top:8px;right:12px}html[data-ze-touch-ui] #library .library-search{margin-right:48px}html[data-ze-touch-ui] .library-list-heading{min-height:28px;padding-block:5px}}

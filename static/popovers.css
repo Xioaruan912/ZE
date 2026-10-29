@@ -1,0 +1,44 @@
+/* Reader controls follow Zotero's compact light popover and comment card. */
+#selection-actions.reader-popover{--popover-surface:#fafafa;--popover-border:#b6b6b6;width:min(304px,calc(100vw - 16px));padding:0;border:1px solid var(--popover-border);border-radius:8px;background:var(--popover-surface);box-shadow:0 2px 7px #0004;color:#111;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;overflow:visible;touch-action:auto}
+#selection-actions .popover-content{position:relative;z-index:1;max-height:inherit;overflow:auto;overscroll-behavior:contain;border-radius:7px;background:var(--popover-surface)}
+#selection-actions::before{content:"";position:absolute;left:calc(var(--arrow-left,50%) - 5px);top:-6px;width:10px;height:10px;background:var(--popover-surface);border-left:1px solid var(--popover-border);border-top:1px solid var(--popover-border);transform:rotate(45deg);pointer-events:none}
+#selection-actions.popover-above::before{top:auto;bottom:-6px;transform:rotate(225deg)}
+#selection-actions[data-mode="selection"] .for-annotation,#selection-actions[data-mode="annotation"] .for-selection{display:none!important}
+#selection-actions .color-row{display:flex;gap:0;justify-content:space-between;margin:0;padding:8px 9px 5px;border:0}
+#selection-actions .swatch{position:relative;flex:1;width:auto;min-width:0;height:32px!important;min-height:0;background:transparent!important;border:0;padding:0;border-radius:3px}
+#selection-actions .swatch::before{content:"";display:block;position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%);background:var(--swatch);border:1px solid #0002;border-radius:3px;box-sizing:border-box}
+#selection-actions .swatch:hover::before,#selection-actions .swatch:focus-visible::before{outline:2px solid #aaa;outline-offset:2px}
+#selection-actions .selection-buttons{display:flex;margin:3px 12px 13px;gap:1px;padding:2px;background:#eaeaea;border-radius:8px;box-shadow:inset 0 1px 4px #0002}
+#selection-actions .selection-buttons button{height:30px;flex:1;border:0;border-radius:6px;background:transparent;color:#787878;font-size:20px;padding:2px 6px;box-shadow:none}
+#selection-actions .selection-buttons button:hover{background:#dedede!important}
+#selection-actions .selection-buttons button:first-child{background:transparent;box-shadow:none}
+#selection-actions .selection-buttons button[aria-pressed="true"]{background:#fff!important;box-shadow:0 1px 3px #0003}
+#selection-actions .selection-buttons #copy-selection{flex:0 0 35px;min-width:0;font-size:18px;background:transparent;box-shadow:none}
+.mode-highlight{display:inline-flex;width:19px;height:20px;align-items:center;justify-content:center;border:1px solid currentColor;line-height:1;font-size:19px}
+.mode-underline{text-decoration:underline;text-underline-offset:3px}
+#selection-actions .selection-translation{margin:0 12px 10px;padding-top:9px;border-top:1px solid #dedede}
+#selection-actions #translation-text{display:block;width:100%;min-height:76px;max-height:240px;height:auto;margin:0;padding:9px;border:0;border-radius:7px;background:#fff;color:#111;font-family:inherit;font-size:15px;line-height:1.55;resize:vertical;outline-offset:1px}
+#selection-actions .translate-header{display:flex;align-items:center;gap:7px;margin:7px 0 0;min-height:23px}
+#selection-actions #translation-service{flex:none;width:auto;max-width:105px;height:25px;margin:0;padding:1px 3px;border:0;border-radius:4px;background:transparent;color:#717171;font-size:11px}
+#selection-actions #translation-state{min-height:0;font-size:11px;line-height:1.3;color:#818181}
+#selection-actions[data-mode="annotation"]{width:min(340px,calc(100vw - 16px))}
+#selection-actions .annotation-header{display:flex;align-items:center;gap:8px;padding:7px 11px 6px;border-bottom:1px solid #e6e6e6;font-size:14px;line-height:22px}
+#selection-actions .annotation-header strong{font-weight:600;flex:1}
+#selection-actions .annotation-type{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:1px solid currentColor;font-size:18px;line-height:18px}
+#selection-actions .annotation-type.is-underline{border:0;text-decoration:underline;text-underline-offset:3px}
+#selection-actions #annotation-comment{display:block;width:100%;min-height:94px;height:112px;max-height:300px;padding:9px 11px;border:0;border-radius:0;background:#fff;color:#111;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;resize:vertical;outline-offset:-2px}
+#selection-actions .annotation-footer{min-height:31px;padding:6px 11px;border-top:1px solid #e6e6e6;font-size:11px;color:#8a8a8a}
+#selection-actions .save-error{color:#b73535}
+#selection-actions[data-mode="annotation"] #selection-palette{display:none}
+#selection-actions[data-mode="annotation"].editing-color #selection-palette{display:flex;border-bottom:1px solid #e6e6e6}
+.annotation-mark.annotation-underline{background:transparent!important;opacity:1;mix-blend-mode:normal;border-bottom:2px solid var(--annotation-color)}
+.annotation-selection-outline{position:absolute;border:1.5px dashed #669aee;pointer-events:none;z-index:3}
+@media(any-pointer:coarse),(max-width:760px){
+ #selection-actions.reader-popover,#selection-actions[data-mode="annotation"]{width:min(350px,calc(100vw - 16px))}
+ #selection-actions .swatch{height:40px!important}
+ #selection-actions .swatch::before{width:23px;height:23px}
+ #selection-actions .selection-buttons button{height:38px;min-width:36px}
+ #selection-actions .selection-buttons #copy-selection{flex-basis:40px}
+ #selection-actions #translation-text,#selection-actions #annotation-comment{font-size:16px}
+ #selection-actions #translation-service{height:32px;font-size:12px}
+}

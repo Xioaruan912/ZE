@@ -1,0 +1,4 @@
+zotero-mcp-server[pdf]==0.15.1
+PyMuPDF==1.28.2
+cryptography==50.0.0
+python-dotenv>=1.0,<2

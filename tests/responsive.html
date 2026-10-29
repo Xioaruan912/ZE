@@ -1,0 +1,49 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Reader responsive verification</title></head><body style="margin:0;background:#dbe2e7;font:14px sans-serif">
+<div style="position:sticky;top:0;z-index:200;background:white;padding:8px"><label>Device <select onchange="resizeReader(this.value)"><option value="320x568">Small phone 320 × 568</option><option value="390x844" selected>Phone 390 × 844</option><option value="820x1180">iPad portrait 820 × 1180</option><option value="1180x820">iPad landscape 1180 × 820</option><option value="844x390">Phone landscape 844 × 390</option></select></label><label>Touch device <input id="coarse" type="checkbox" onchange="document.querySelector('iframe').src=this.checked?'/?touch=1&preview=1':'/?preview=1'"></label><button onclick="document.querySelector('iframe').contentDocument.querySelector('#run-pencil-fixture').click()">Run Pencil checks</button><button onclick="document.querySelector('#result').textContent=document.querySelector('iframe').contentDocument.querySelector('#pencil-fixture-result').textContent">Read Pencil results</button><button onclick="document.querySelector('iframe').contentDocument.querySelector('#run-touch-fixture').click()">Run touch checks</button><button onclick="let d=document.querySelector('iframe').contentDocument;document.querySelector('#result').textContent=d.querySelector('#touch-fixture-result').textContent">Read touch results</button><button onclick="document.querySelector('iframe').contentDocument.querySelector('#run-fixture').click()">Run isolated checks</button><button onclick="let w=document.querySelector('iframe').contentWindow;document.querySelector('#result').textContent=w.document.querySelector('#fixture-result').textContent">Read results</button><div id="sizing-result"></div><pre id="result" style="margin:0;max-height:180px;overflow:auto"></pre></div>
+<div style="padding:8px;background:white"><button onclick="runDeviceMatrix(this)">Run device matrix</button><pre id="matrix-result" style="white-space:pre-wrap;max-height:220px;overflow:auto"></pre><script id="matrix-evidence" type="application/json">[]</script></div>
+<iframe title="Responsive reader" src="/?preview=1" style="display:block;border:0;width:390px;height:844px;margin:16px auto"></iframe></body></html>
+<script>
+function anchor(){const doc=document.querySelector('iframe').contentDocument,root=doc.querySelector('#document'),page=doc.querySelector('#page').value,p=doc.querySelector(`.pdf-page[data-page="${page}"]`);if(!p)return null;return {page,fraction:(root.getBoundingClientRect().top-p.getBoundingClientRect().top)/p.getBoundingClientRect().height}}
+function resizeReader(size){const before=anchor(),f=document.querySelector('iframe'),s=size.split('x');f.style.width=s[0]+'px';f.style.height=s[1]+'px';setTimeout(()=>{const after=anchor();document.querySelector('#sizing-result').textContent=before&&after?(before.page===after.page&&Math.abs(before.fraction-after.fraction)<.015?'PASS':'FAIL')+' rotation anchor: '+before.fraction.toFixed(3)+' → '+after.fraction.toFixed(3):'No paper open'},700)}
+async function runDeviceMatrix(button){
+ const iframe=document.querySelector('iframe'),output=document.querySelector('#matrix-result'),reports=[],pause=ms=>new Promise(r=>setTimeout(r,ms));button.disabled=true;output.dataset.result='running';
+ const jobs=[['iPad Pencil portrait','820x1180',true,'pencil'],['iPad Pencil landscape','1180x820',true,'pencil'],['Small phone','320x568',true,'touch'],['Phone','390x844',true,'touch'],['Phone landscape','844x390',true,'touch'],['iPad portrait','820x1180',true,'touch'],['iPad landscape','1180x820',true,'touch'],['Phone reading','390x844',true,'reading'],['iPad reading','820x1180',true,'reading'],['Desktop regression','1280x720',false,'reading']];
+ try{
+  for(const [name,size,touch,suite] of jobs){
+   output.textContent=reports.map(r=>`${r.result.toUpperCase()} ${r.name}: ${r.checks} checks${r.error?' — '+r.error:''}`).join('\n')+'\nRUNNING '+name;
+   const [width,height]=size.split('x');iframe.style.width=width+'px';iframe.style.height=height+'px';await new Promise(resolve=>{iframe.onload=resolve;iframe.src='/'+(touch?'?touch=1&':'?')+'matrix='+Date.now()});
+   let doc=iframe.contentDocument;const runId=suite==='pencil'?'#run-pencil-fixture':suite==='touch'?'#run-touch-fixture':'#run-fixture',resultId=suite==='pencil'?'#pencil-fixture-result':suite==='touch'?'#touch-fixture-result':'#fixture-result';
+   for(let i=0;i<120&&!doc.querySelector('.item:not(:disabled)');i++)await pause(50);
+   doc.querySelector(runId).click();let result=doc.querySelector(resultId);
+   for(let i=0;i<400&&!result.dataset.result;i++)await pause(50);
+   const runtime=doc.querySelector('#fixture-runtime-errors')?.textContent||'';const details=result.textContent+(runtime?'\nFAIL runtime '+runtime:'');reports.push({name,size,touch,suite,result:runtime?'fail':result.dataset.result||'timeout',checks:details.split('\n').filter(l=>l.startsWith('PASS ')).length,error:details.split('\n').find(l=>l.startsWith('FAIL '))||'',details});
+  }
+ }catch(error){reports.push({name:'matrix',result:'fail',checks:0,error:error.message})}
+ document.querySelector('#matrix-evidence').textContent=JSON.stringify(reports);output.textContent=reports.map(r=>`${r.result.toUpperCase()} ${r.name}: ${r.checks} checks${r.error?' — '+r.error:''}`).join('\n');output.dataset.result=reports.every(r=>r.result==='pass')?'pass':'fail';button.disabled=false;
+}
+</script>
+<script>
+// Documentation screenshots use only the same synthetic, isolated fixture.
+const showcase=new URL(location.href).searchParams.get('demo');
+if(showcase==='desktop'||showcase==='ipad'){
+ const frame=document.querySelector('iframe'),size=showcase==='ipad'?[820,1180]:[1280,720];
+ for(const box of document.querySelectorAll('body > div'))box.hidden=true;
+ document.documentElement.style.width=size[0]+'px';document.body.style.width=size[0]+'px';
+ frame.style.cssText=`display:block;border:0;width:${size[0]}px;height:${size[1]}px;margin:0`;
+ frame.onload=async()=>{
+  const doc=frame.contentDocument,pause=ms=>new Promise(r=>setTimeout(r,ms)),wait=async fn=>{for(let i=0;i<300;i++){if(fn())return;await pause(50)}throw Error('Showcase fixture did not become ready')};
+  await wait(()=>doc.querySelector('.item:not(:disabled)'));
+  if(showcase==='ipad'){
+   doc.querySelector('#run-pencil-fixture').click();await wait(()=>doc.querySelector('#pencil-fixture-result').dataset.result);
+   if(doc.querySelector('#pencil-fixture-result').dataset.result!=='pass')throw Error('Pencil showcase checks failed');
+   doc.querySelector('#zoom-mode').value='width';doc.querySelector('#zoom-mode').dispatchEvent(new frame.contentWindow.Event('change'));
+   doc.querySelector('[data-pencil-mode="ink"]').click();
+  }else{
+   doc.querySelector('.item').click();await wait(()=>doc.querySelector('.pdf-page[data-ready="yes"]'));
+   doc.querySelector('#show-notes').click();
+  }
+  document.body.dataset.demoReady='yes';
+ };
+ frame.src='/?preview=1'+(showcase==='ipad'?'&touch=1':'');
+}
+</script>

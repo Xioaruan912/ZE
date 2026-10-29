@@ -1,0 +1,43 @@
+window.addEventListener('DOMContentLoaded',()=>{
+ document.querySelector('#run-pencil-fixture').onclick=async()=>{
+  const $=s=>document.querySelector(s),out=$('#pencil-fixture-result'),results=[],pause=ms=>new Promise(r=>setTimeout(r,ms));
+  const wait=async(fn,label)=>{for(let i=0;i<140;i++){if(fn())return;await pause(40)}throw Error(label)};
+  const check=(condition,label)=>{if(!condition)throw Error(label);results.push('PASS '+label);out.textContent=results.join('\n')};
+  const ink=()=>notes.filter(a=>a.type==='ink');
+  const mode=value=>$(`[data-pencil-mode="${value}"]`).click();
+  const point=()=>{const wrap=$('.pdf-page[data-page="1"]'),r=wrap.getBoundingClientRect();return {wrap,x:r.left+r.width*.62,y:r.top+r.height*.16}};
+  const event=(wrap,type,x,y,id=700,kind='pen')=>{const e=new PointerEvent(type,{bubbles:true,cancelable:true,pointerType:kind,pointerId:id,clientX:x,clientY:y,button:0});wrap.dispatchEvent(e);return e};
+  const stroke=async(id=700)=>{const {wrap,x,y}=point();event(wrap,'pointerdown',x,y,id);event(wrap,'pointermove',x+18,y+10,id);await pause(120);event(wrap,'pointermove',x+40,y,id);event(wrap,'pointerup',x+40,y,id);await pause(100)};
+  try{
+   await wait(()=>$('.item:not(:disabled)'),'library ready');if($('#menu').getAttribute('aria-expanded')!=='true')$('#menu').click();$('.item').click();await wait(()=>$('.pdf-page[data-ready="yes"] .textLayer span'),'PDF ready');await pause(500);
+   check(!$('#pencil-dock').hidden&&$('[data-pencil-mode="select"]').getAttribute('aria-pressed')==='true','tablet opens in explicit selection mode with a bottom dock');
+   check($('#pencil-dock').getBoundingClientRect().bottom<=innerHeight+1&&[...document.querySelectorAll('#pencil-dock button,#pencil-dock select')].every(b=>b.getBoundingClientRect().height>=43.5),'bottom pen controls stay in view with touch-sized targets');
+   const span=$('.pdf-page[data-ready="yes"] .textLayer span'),r=span.getBoundingClientRect();event(span,'pointerdown',r.left+3,(r.top+r.bottom)/2);event(span,'pointermove',r.left+55,(r.top+r.bottom)/2);event(span,'pointerup',r.left+55,(r.top+r.bottom)/2);await wait(()=>!$('#selection-actions').hidden,'selection translation card');
+   check(getSelection().toString().length>0&&ink().length===0,'selection mode uses Pencil to select text without drawing');
+   mode('ink');const calls=translationCalls,{wrap,x,y}=point();event(wrap,'pointerdown',x,y,701,'touch');event(wrap,'pointermove',x+50,y+20,701,'touch');event(wrap,'pointerup',x+50,y+20,701,'touch');await pause(350);
+   check(ink().length===0&&translationCalls===calls,'fingers neither draw nor trigger translation in handwriting mode');
+   event(wrap,'pointerdown',x,y,702);event(wrap,'pointermove',x+25,y+10,702);await pause(160);
+   const {createAnnotationWriter}=await import('/annotation-writer.mjs');let drafts=createAnnotationWriter({storage:localStorage}).drafts('TESTPDF1');
+   check(drafts.some(a=>a.type==='ink'&&a.position.paths[0].length>=4)&&ink().length===0,'active stroke is cached before lifting the pen and before networking');
+   event(wrap,'pointerup',x+45,y+5,702);await wait(()=>ink().length===1,'first ink saved');
+   const first=structuredClone(ink()[0].position);check(!getSelection().toString()&&translationCalls===calls&&ink()[0].text==='','handwriting never becomes selected text or a translation request');
+   check(first.paths.length===1&&!first.rects&&first.width===1.6&&$('.handwriting-layer path'),'native vector paths render immediately and retain pen width');
+   const oldPath=$('.handwriting-layer path').getAttribute('d');$('#zoomin').click();await wait(()=>$('.pdf-page[data-page="1"][data-ready="yes"] .handwriting-layer path'),'zoomed ink ready');await pause(200);
+   check(JSON.stringify(ink()[0].position)===JSON.stringify(first)&&$('.handwriting-layer path').getAttribute('d')!==oldPath,'zoom changes rendered coordinates while saved PDF coordinates stay fixed');
+   mode('erase');let w=$('.pdf-page[data-page="1"]'),box=w.getBoundingClientRect(),scale=box.width/600,px=box.left+first.paths[0][0]*scale,py=box.top+(800-first.paths[0][1])*scale;event(w,'pointerdown',px,py,703);event(w,'pointerup',px,py,703);await wait(()=>ink().length===0,'ink erased');
+   check(notes.some(a=>a.id==='z:TESTNOTE'),'eraser removes a pen stroke without deleting text highlights');$('#pencil-undo').click();await wait(()=>ink().length===1,'erase undo');
+   check(JSON.stringify(ink()[0].position)===JSON.stringify(first),'undo restores an erased stroke with exact geometry');$('#pencil-undo').click();await wait(()=>ink().length===0,'draw undo after restore');check(true,'undo history still refers to a restored stroke rather than its deleted ID');
+   mode('ink');let p=point();event(p.wrap,'pointerdown',p.x,p.y,704);const touch=(type,xx,yy)=>{const t={identifier:900,touchType:'stylus',clientX:xx,clientY:yy},e=new Event(type,{bubbles:true,cancelable:true});Object.defineProperties(e,{touches:{value:type==='touchend'?[]:[t]},changedTouches:{value:[t]}});p.wrap.dispatchEvent(e)};
+   touch('touchstart',p.x,p.y);touch('touchmove',p.x+25,p.y+10);event(p.wrap,'pointerup',p.x+25,p.y+10,704);touch('touchend',p.x+30,p.y+15);await wait(()=>ink().length===1,'WebKit pen stroke');check(true,'WebKit stylus touches and Pointer Events do not duplicate a stroke');
+   p=point();const beforeLong=ink().length;event(p.wrap,'pointerdown',p.x,p.y,705);const samples=Array.from({length:650},(_,i)=>({clientX:p.x+(i%40)*1.2,clientY:p.y+Math.floor(i/40)*1.2}));const move=new PointerEvent('pointermove',{bubbles:true,cancelable:true,pointerType:'pen',pointerId:705,clientX:samples.at(-1).clientX,clientY:samples.at(-1).clientY});Object.defineProperty(move,'getCoalescedEvents',{value:()=>samples});p.wrap.dispatchEvent(move);event(p.wrap,'pointerup',samples.at(-1).clientX,samples.at(-1).clientY,705);await wait(()=>ink().length>=beforeLong+2,'long stroke chunks');
+   check(ink().every(a=>a.position.paths.flat().length<=1200),'coalesced long strokes split into bounded native payloads');$('#pencil-undo').click();await wait(()=>ink().length===beforeLong,'long stroke undo');check(true,'one undo removes every chunk of one physical stroke');
+   offline=true;const beforeOffline=ink().length;await stroke(706);drafts=createAnnotationWriter({storage:localStorage}).drafts('TESTPDF1');check(drafts.some(a=>a.type==='ink'&&a.position.paths[0].length>=4)&&ink().length===beforeOffline,'offline pen strokes remain in durable browser storage');offline=false;window.dispatchEvent(new Event('online'));await wait(()=>ink().length===beforeOffline+1,'offline recovery');check(true,'reconnecting retries an offline stroke exactly once');
+   const originalSet=Storage.prototype.setItem,beforeQuota=ink().length;let exported=null;try{
+    Storage.prototype.setItem=function(){throw new DOMException('test quota','QuotaExceededError')};await stroke(707);check($('.handwriting-layer path')&&$('#pencil-hint').textContent.includes('备份'),'storage exhaustion keeps the ink visible and requests a backup');
+    const originalURL=URL.createObjectURL,originalClick=HTMLAnchorElement.prototype.click;try{URL.createObjectURL=blob=>{exported=blob;return 'blob:test-pencil'};HTMLAnchorElement.prototype.click=function(){if(!this.download.startsWith('ZE-handwriting'))originalClick.call(this)};$('#pencil-export').click();const data=JSON.parse(await exported.text());check(data.recovery.some(a=>a.type==='ink'&&a.position.paths[0].length>=4),'backup includes in-memory ink when browser persistence fails')}finally{URL.createObjectURL=originalURL;HTMLAnchorElement.prototype.click=originalClick}
+   }finally{Storage.prototype.setItem=originalSet}window.dispatchEvent(new Event('online'));await wait(()=>ink().length===beforeQuota+1,'storage recovery');check(true,'after storage recovers the unsaved stroke is persisted and submitted');
+   p=point();const beforeCancel=ink().length;event(p.wrap,'pointerdown',p.x,p.y,708);event(p.wrap,'pointermove',p.x+20,p.y+20,708);event(p.wrap,'pointercancel',p.x+20,p.y+20,708);await wait(()=>ink().length===beforeCancel+1,'cancelled stroke saved');check(true,'an interrupted pen gesture retains its captured points');
+   mode('select');check(!$('#document').classList.contains('pencil-writing')&&$('[data-pencil-mode="select"]').getAttribute('aria-pressed')==='true','switching back restores text selection explicitly');check(!$('#fixture-runtime-errors').textContent,'Pencil flow has no uncaught runtime errors');out.dataset.result='pass';
+  }catch(error){offline=false;out.textContent=results.join('\n')+'\nFAIL '+error.message;out.dataset.result='fail';console.error(error)}
+ };
+});

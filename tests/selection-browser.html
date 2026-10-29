@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><title>Selection input regression test</title>
+<style>body{font:18px system-ui;margin:30px}#surface{overflow:auto;border:1px solid #ccc;width:600px;height:200px}.textLayer{padding:20px;line-height:2;user-select:text}.textLayer span{white-space:pre}button{margin:12px;padding:10px}output{display:block;white-space:pre-wrap}</style>
+<h1>Selection input regression test</h1>
+<button id="run">Run selection tests</button>
+<div id="surface"><div class="pdf-page"><div class="textLayer"><span id="line1">Identity-Based encryption protects messages.</span><br><span id="line2">Private keys remain with the reader.</span></div></div></div><output id="result">Ready</output>
+<script type="module">
+import {installSelectionInput,selectionFocusRect} from '/selection-input.mjs';
+const root=document.querySelector('#surface'),layer=root.querySelector('.textLayer'),result=document.querySelector('#result');let finished=0;
+const input=installSelectionInput(root,{onFinish:()=>finished++});
+function point(id,index){const node=document.querySelector(id).firstChild,r=document.createRange();r.setStart(node,index);r.setEnd(node,index+1);const b=r.getBoundingClientRect();return {x:(b.left+b.right)/2,y:(b.top+b.bottom)/2}}
+function pointer(type,p,pointerType='pen'){const e=new PointerEvent(type,{bubbles:true,cancelable:true,pointerType,pointerId:3,clientX:p.x,clientY:p.y,buttons:type==='pointerup'?0:1});layer.dispatchEvent(e);return e}
+function touch(type,p){const e=new Event(type,{bubbles:true,cancelable:true});const t={identifier:7,touchType:'stylus',clientX:p.x,clientY:p.y};Object.defineProperties(e,{touches:{value:type==='touchend'?[]:[t]},changedTouches:{value:[t]}});layer.dispatchEvent(e);return e}
+document.querySelector('#run').onclick=()=>{
+ const checks=[];const check=(name,ok)=>{checks.push(`${ok?'PASS':'FAIL'} ${name}`);if(!ok)throw new Error(name)};
+ try{
+  let a=point('#line1',3),b=point('#line2',10);
+  const down=pointer('pointerdown',a);check('Pen starts selection and cancels its default gesture',down.defaultPrevented&&input.active);
+  pointer('pointermove',b);check('Moving pen keeps the gesture active',input.active&&finished===0);
+  pointer('pointerup',b);check('Multi-line pen selection finishes once',!input.active&&finished===1&&getSelection().toString().includes('Private keys'));
+  const forwardFocus=selectionFocusRect(getSelection()),secondLine=document.querySelector('#line2').getBoundingClientRect();check('Popover focus follows the final line, not the whole selection box',forwardFocus.top>=secondLine.top&&forwardFocus.bottom<=secondLine.bottom+1&&forwardFocus.right===forwardFocus.left);
+  a=point('#line1',19);b=point('#line1',2);pointer('pointerdown',a);pointer('pointermove',b);pointer('pointerup',b);check('Backward drag includes complete words',getSelection().toString()==='Identity-Based encryption');
+  const backwardFocus=selectionFocusRect(getSelection()),firstLine=document.querySelector('#line1').getBoundingClientRect();check('Backward selection points at the last dragged-to start',Math.abs(backwardFocus.left-firstLine.left)<2);
+  a=point('#line1',3);const finger=pointer('pointerdown',a,'touch');check('Ordinary finger scrolling is not intercepted',!finger.defaultPrevented&&!input.active);
+  input.setFingerSelect(true);pointer('pointerdown',a,'touch');pointer('pointermove',point('#line1',20),'touch');pointer('pointerup',point('#line1',20),'touch');check('Finger selection mode can drag words',getSelection().toString()==='Identity-Based encryption');input.setFingerSelect(false);
+  pointer('pointerdown',a);pointer('pointercancel',a);check('Cancelled gesture leaves no stale selection',!input.active&&getSelection().toString()==='');
+  pointer('pointerdown',a);const start=touch('touchstart',a);pointer('pointercancel',a);touch('touchmove',point('#line1',20));touch('touchend',point('#line1',20));check('Stylus Touch fallback survives Pointer cancellation',start.defaultPrevented&&!input.active&&getSelection().toString()==='Identity-Based encryption');
+  const mouse=pointer('pointerdown',point('#line1',3),'mouse');check('Mouse restarts inside an existing selection without dragging the old block',getSelection().isCollapsed&&!mouse.defaultPrevented&&!input.active);
+  pointer('pointerdown',a);pointer('pointerup',a);const prior=getSelection().toString();
+  const shift=new PointerEvent('pointerdown',{bubbles:true,cancelable:true,pointerType:'mouse',pointerId:4,shiftKey:true,button:0,clientX:a.x,clientY:a.y});layer.dispatchEvent(shift);check('Shift mouse extension preserves the existing anchor',getSelection().toString()===prior);
+  const right=new PointerEvent('pointerdown',{bubbles:true,cancelable:true,pointerType:'mouse',pointerId:4,button:2,clientX:a.x,clientY:a.y});layer.dispatchEvent(right);check('Right-click preserves the selected text for copying',getSelection().toString()===prior&&!right.defaultPrevented);
+  const drag=new Event('dragstart',{bubbles:true,cancelable:true});layer.querySelector('span').dispatchEvent(drag);check('PDF text cannot enter native drag-and-drop mode',drag.defaultPrevented);
+ }catch(e){checks.push(e.message)}
+ result.textContent=checks.join('\n');
+};
+</script>
