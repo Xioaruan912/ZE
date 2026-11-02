@@ -14,7 +14,7 @@
   "description": "ZE private Zotero paper reader",
   "scripts": {
     "build": "node scripts/build-frontend.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs plugins/reading-columns/*.test.cjs"
   },
   "license": "AGPL-3.0-only",
   "engines": {

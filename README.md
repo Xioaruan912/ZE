@@ -121,6 +121,10 @@ npm.cmd run build
 
 之后按“第一次使用”连接 Zotero，再双击 `start-reader.bat`。本机已安装的其他 Zotero 插件不会自动适配到网页；目前支持上述阅读功能与翻译桥接。
 
+## Zotero 桌面阅读路线插件
+
+`plugin` 分支提供独立的[阅读顺序与分支定位插件](plugins/reading-columns/README.md)，在 Zotero 桌面文献列表中按当前分类显示阅读顺序和分支定位。源码、构建脚本和可安装的 XPI 位于 `plugins/reading-columns/`。此插件使用阅读标签与分类键配置，与网页阅读器分别安装。
+
 ## 开源许可
 
 [AGPL-3.0](LICENSE)。第三方组件见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本项目为独立项目，与 Zotero、CNKI、Google、Microsoft 无隶属关系。截图使用项目自带的示例文献，不包含个人文库。

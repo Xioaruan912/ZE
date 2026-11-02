@@ -1,0 +1,14 @@
+{
+  "manifest_version": 2,
+  "name": "阅读顺序与分支定位",
+  "version": "0.1.1",
+  "description": "在文献列表中按当前分支显示已有阅读标签的顺序和定位。",
+  "applications": {
+    "zotero": {
+      "id": "reading-route-columns@local.example",
+      "update_url": "https://reading-route-columns.invalid/updates.json",
+      "strict_min_version": "10.0",
+      "strict_max_version": "10.0.*"
+    }
+  }
+}

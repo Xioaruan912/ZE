@@ -17,6 +17,7 @@
 !/scripts/
 !/tests/
 !/zotero-bridge/
+!/plugins/
 !/ops/
 !/docs/
 !/docs/screenshots/
@@ -36,6 +37,7 @@ node_modules/
 *.token
 *.hash
 *.xpi
+!/plugins/reading-columns/reading-route-columns.xpi
 *.building
 *.sqlite*
 *.db
