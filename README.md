@@ -123,7 +123,7 @@ npm.cmd run build
 
 ## Zotero 桌面阅读路线插件
 
-`plugin` 分支提供独立的[阅读顺序与分支定位插件](plugins/reading-columns/README.md)，在 Zotero 桌面文献列表中按当前分类显示阅读顺序和分支定位。源码、构建脚本和可安装的 XPI 位于 `plugins/reading-columns/`。此插件使用阅读标签与分类键配置，与网页阅读器分别安装。
+`plugin` 分支提供独立的[阅读完成与路线插件](plugins/reading-columns/README.md)，在 Zotero 桌面文献列表中勾选“已读”，状态通过 Zotero 标签保存和同步；原有阅读顺序与分支定位列默认隐藏，可从表头菜单重新显示。源码、构建脚本和可安装的 XPI 位于 `plugins/reading-columns/`，与网页阅读器分别安装。
 
 ## 开源许可
 

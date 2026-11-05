@@ -34,10 +34,11 @@ test('rendered cells retain the column class used for sizing',async()=>{
  const columns=[];
  await ctx.ReadingColumns.start({
   ItemTreeManager:{registerColumn:options=>{columns.push(options);return options.dataKey;}},
+  Prefs:{get:()=>undefined},
   getMainWindows:()=>[]
  });
  const doc={createElement:()=>({}),defaultView:{}};
- const cell=columns[0].renderCell(0,'03',{className:'column-reading-order'},false,doc);
+ const cell=columns.find(column=>column.dataKey==='order').renderCell(0,'03',{className:'column-reading-order'},false,doc);
  assert.ok(cell.className.split(' ').includes('column-reading-order'));
  assert.equal(cell.textContent,'03');
 });

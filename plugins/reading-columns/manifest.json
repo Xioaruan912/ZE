@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "阅读顺序与分支定位",
-  "version": "0.1.1",
-  "description": "在文献列表中按当前分支显示已有阅读标签的顺序和定位。",
+  "version": "0.2.0",
+  "description": "在文献列表中勾选已读状态，保留可选的阅读顺序与分支定位列。",
   "applications": {
     "zotero": {
       "id": "reading-route-columns@local.example",

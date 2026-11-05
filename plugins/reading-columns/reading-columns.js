@@ -31,46 +31,119 @@ var ReadingColumns = (() => {
     }
     return {order:'',position:''};
   }
-  let keys=[], windows=new Map(), zotero=null;
+  const READ_TAG='阅读状态-已读';
+  const LAYOUT_PREF='extensions.zotero.readingRouteColumns.layoutVersion';
+  const writes=new WeakMap();
+  let keys=[], windows=new Map(), zotero=null, migrateLayout=false;
+  function canMarkRead(item) {
+    return !!item && !item.parentID && (item.isRegularItem?.() ||
+      (item.isAttachment?.() && item.attachmentContentType==='application/pdf'));
+  }
+  function isRead(item) {
+    return canMarkRead(item) && item.getTags().some(tag=>tag.tag===READ_TAG);
+  }
+  async function setRead(item,checked) {
+    if(!canMarkRead(item)) throw new Error('只能标记论文或独立 PDF 的已读状态');
+    const previous=writes.get(item) || Promise.resolve();
+    const task=previous.catch(()=>{}).then(async()=>{
+      const oldTag=item.getTags().find(tag=>tag.tag===READ_TAG);
+      if(!!oldTag===checked) return;
+      try {
+        if(checked) item.addTag(READ_TAG,0);
+        else item.removeTag(READ_TAG);
+        await item.saveTx();
+      } catch(error) {
+        if(oldTag) item.addTag(READ_TAG,oldTag.type);
+        else item.removeTag(READ_TAG);
+        throw error;
+      }
+    });
+    writes.set(item,task);
+    try {await task;}
+    finally {if(writes.get(item)===task) writes.delete(item);}
+  }
+  async function refreshWindows() {
+    for(const win of windows.keys()) {
+      try {if(!win.closed) await win.ZoteroPane?.itemsView?.refreshAndMaintainSelection();}
+      catch(error) {zotero.logError(error);}
+    }
+  }
+  function renderReadCell(index,data,column,isFirst,doc) {
+    const span=doc.createElement('span');
+    span.className='cell '+(column.className || '');
+    const item=doc.defaultView.ZoteroPane?.itemsView?.getRow(index)?.ref;
+    if(!canMarkRead(item)) return span;
+    span.style.display='flex';
+    span.style.alignItems='center';
+    span.style.justifyContent='center';
+    const checkbox=doc.createElementNS('http://www.w3.org/1999/xhtml','input');
+    checkbox.type='checkbox';
+    checkbox.checked=isRead(item);
+    checkbox.setAttribute('aria-label','已读');
+    const updateTitle=()=>{checkbox.title=checkbox.checked?'已读，点击取消':'标为已读';};
+    updateTitle();
+    for(const type of ['mousedown','click','dblclick']) {
+      checkbox.addEventListener(type,event=>event.stopPropagation());
+    }
+    checkbox.addEventListener('keydown',event=>{
+      if(event.key===' ' || event.key==='Enter') event.stopPropagation();
+    });
+    checkbox.addEventListener('change',async event=>{
+      event.stopPropagation();
+      const checked=checkbox.checked;
+      checkbox.disabled=true;
+      try {
+        await setRead(item,checked);
+        await refreshWindows();
+      } catch(error) {
+        zotero.logError(error);
+        await refreshWindows();
+        doc.defaultView.alert('已读状态未保存，请重试。\n'+String(error.message || error));
+      } finally {
+        checkbox.checked=isRead(item);
+        checkbox.disabled=false;
+        updateTitle();
+      }
+    });
+    span.appendChild(checkbox);
+    return span;
+  }
   function selected(win) {
     try { return win.ZoteroPane.getSelectedCollection()?.key || ''; } catch {return '';}
   }
   function value(item,win) {
-    if(!item || item.parentID) return {order:'',position:''};
-    return display(item.getTags(),selected(win));
+    if(!item || item.parentID) return {order:'',position:'',read:''};
+    return {...display(item.getTags(),selected(win)),read:canMarkRead(item)?(isRead(item)?'1':'0'):''};
   }
   async function setupWindow(win) {
     if(windows.has(win)) return;
     const state={last:null,busy:false,timer:null,configured:false};
     windows.set(win,state);
     const refresh=async()=>{
+      if(win.closed) {win.clearInterval(state.timer);windows.delete(win);return;}
       const collection=selected(win), view=win.ZoteroPane?.itemsView;
       if(state.busy || !view || collection===state.last) return;
       state.busy=true;
       try {
         await view.refreshAndMaintainSelection();
-        if(branches[collection]) {
-          for(const key of keys) {
-            const cols=view._getColumns(),i=cols.findIndex(c=>c.dataKey===key);
-            if(i>=0 && cols[i].hidden) view.tree._columns.toggleHidden(i);
-          }
-          if(!state.configured) {
-            let cols=view._getColumns();
-            let i=cols.findIndex(c=>c.dataKey===keys[0]);
-            if(i>=0) view.tree._columns.setOrder(i,0);
-            cols=view._getColumns();
-            i=cols.findIndex(c=>c.dataKey===keys[1]);
-            if(i>=0) view.tree._columns.setOrder(i,2);
-            state.configured=true;
-          }
-          if(view.getSortField()!==keys[0]) {
+        if(!state.configured) {
+          if(migrateLayout) {
+            for(const key of keys) {
+              const cols=view._getColumns(),i=cols.findIndex(c=>c.dataKey===key);
+              const hidden=key!==keys[0];
+              if(i<0) throw new Error('等待已读列初始化');
+              if(!!cols[i].hidden!==hidden) view.tree._columns.toggleHidden(i);
+            }
             const i=view._getColumns().findIndex(c=>c.dataKey===keys[0]);
-            if(i>=0) view.toggleSort(i);
+            view.tree._columns.setOrder(i,0);
+            if(keys.slice(1).includes(view.getSortField())) {
+              const title=view._getColumns().findIndex(c=>c.dataKey==='title');
+              if(title>=0) view.toggleSort(title);
+            }
+            zotero.Prefs.set(LAYOUT_PREF,2,true);
+            migrateLayout=false;
           }
-          if(view.getSortDirection()===-1) {
-            const i=view._getColumns().findIndex(c=>c.dataKey===keys[0]);
-            if(i>=0) view.toggleSort(i);
-          }
+          state.configured=true;
         }
         state.last=collection;
       } catch(e) {zotero.logError(e);} finally {state.busy=false;}
@@ -81,12 +154,13 @@ var ReadingColumns = (() => {
   async function start(Zotero,pluginID='reading-route-columns@local.example') {
     zotero=Zotero;
     if(keys.length) return keys;
-    for(const [name,label,width] of [['order','阅读顺序','84'],['position','分支定位','240']]) {
+    migrateLayout=Zotero.Prefs.get(LAYOUT_PREF,true)!==2;
+    for(const [name,label,width] of [['read','已读','60'],['order','阅读顺序','84'],['position','分支定位','240']]) {
       const key=await Zotero.ItemTreeManager.registerColumn({
         dataKey:name,label,pluginID,width,minWidth:60,enabledTreeIDs:['main'],
         zoteroPersist:['width','hidden','sortDirection'],
         dataProvider:item=>value(item,Zotero.getMainWindow())[name],
-        renderCell:(index,data,column,isFirst,doc)=>{
+        renderCell:name==='read'?renderReadCell:(index,data,column,isFirst,doc)=>{
           const span=doc.createElement('span');
           span.className='cell '+(column.className || '');
           const item=doc.defaultView.ZoteroPane?.itemsView?.getRow(index)?.ref;
@@ -107,5 +181,5 @@ var ReadingColumns = (() => {
     for(const key of keys) await zotero.ItemTreeManager.unregisterColumn(key);
     keys=[];
   }
-  return {display,start,stop,setupWindow};
+  return {display,isRead,setRead,start,stop,setupWindow};
 })();
