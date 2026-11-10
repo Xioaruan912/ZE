@@ -175,11 +175,15 @@ var ReadingColumns = (() => {
     for(const win of Zotero.getMainWindows()) await setupWindow(win);
     return keys;
   }
+  function releaseWindow(win) {
+    const state=windows.get(win);
+    if(state) {try{win.clearInterval(state.timer);}catch{} windows.delete(win);}
+  }
   async function stop() {
     for(const [win,state] of windows) {try{win.clearInterval(state.timer);}catch{}}
     windows.clear();
     for(const key of keys) await zotero.ItemTreeManager.unregisterColumn(key);
     keys=[];
   }
-  return {display,isRead,setRead,start,stop,setupWindow};
+  return {display,isRead,setRead,start,stop,setupWindow,releaseWindow};
 })();

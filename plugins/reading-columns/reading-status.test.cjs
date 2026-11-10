@@ -43,6 +43,13 @@ function environment(paper,{prefs=new Map(),sort='order'}={}){
 }
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 
+test('closing a main window releases its timer without unregistering global columns',async()=>{
+ const api=load(),env=environment(item());let cleared=0;env.win.clearInterval=()=>{cleared++;};
+ await api.start(env.zotero);
+ assert.equal(typeof api.releaseWindow,'function');api.releaseWindow(env.win);
+ assert.equal(cleared,1);assert.equal(env.definitions.length,3);await api.stop();assert.equal(cleared,1);
+});
+
 test('checking and unchecking persist only the read tag without changing other tags',async()=>{
  const api=load(),paper=item();
  assert.equal(typeof api.setRead,'function');

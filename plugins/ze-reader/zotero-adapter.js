@@ -2,6 +2,7 @@ var ZEAdapter = {
  create({Zotero,Services,rootURI}){
   const isPDF=item=>item&&!item.deleted&&item.isAttachment?.()&&item.attachmentContentType==='application/pdf';
   const adapter={
+   copyText(text){Zotero.Utilities.Internal.copyTextToClipboard(text);},
    async getItem(id){return await Zotero.Items.getAsync(id)||null;},
    async resolveAttachment(ref){
     if(!ref||!Number.isInteger(ref.libraryID)||!/^[A-Z0-9]{8}$/.test(ref.attachmentKey))return null;

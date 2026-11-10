@@ -5,6 +5,7 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 RUNTIME_FILES = {
+    **{name: BASE / name for name in ('workbench.xhtml', 'workbench.js', 'workbench.css', 'settings.xhtml', 'settings.js', 'locale/zh-CN/ze-reader.ftl')},
     'matrix.js': BASE / 'matrix.js',
     'summary.js': BASE / 'summary.js',
     'tab-groups.js': BASE / 'tab-groups.js',
