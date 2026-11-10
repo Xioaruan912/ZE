@@ -5,6 +5,7 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 RUNTIME_FILES = {
+    'bridge.js': BASE / 'bridge.js',
     'preferences.js': BASE / 'preferences.js',
     'zotero-adapter.js': BASE / 'zotero-adapter.js',
     'manifest.json': BASE / 'manifest.json',
