@@ -13,6 +13,7 @@ var ZERuntime = {
     }catch(e){await ReadingColumns.stop();states.columns={state:'error',message:'阅读列初始化失败'};Zotero.logError(new Error(states.columns.message));}
     if(typeof ZEPreferences!=='undefined'&&typeof ZEAdapter!=='undefined'){
      runtime.store=ZEPreferences.create(Zotero);runtime.adapter=ZEAdapter.create({Zotero,Services,rootURI});
+     if(typeof ZETabGroups!=='undefined')runtime.groups=ZETabGroups.create({store:runtime.store,adapter:runtime.adapter});
      if(typeof ZEBridge!=='undefined'){
       runtime.bridge=ZEBridge.create({Zotero,store:runtime.store,adapter:runtime.adapter,pluginID:id});
       cleanups.push(()=>runtime.bridge.stop());
