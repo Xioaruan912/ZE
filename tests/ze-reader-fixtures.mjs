@@ -16,4 +16,3 @@ export function environment(){
  getMainWindows:()=>[win],getMainWindow:()=>win,logError:e=>errors.push(e),Server:{Endpoints:{}}};
  return {Zotero,win,prefs,registered,timers,errors};
 }
-

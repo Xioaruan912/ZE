@@ -11,4 +11,3 @@ function onMainWindowLoad({window}) {if(zeScope)void zeScope.runtime.setupWindow
 function onMainWindowUnload({window}) {zeScope?.runtime.releaseWindow(window);}
 async function shutdown() {if(zeScope){await zeScope.runtime.stop();zeScope=null;}}
 function uninstall() {}
-

@@ -5,6 +5,8 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 RUNTIME_FILES = {
+    'preferences.js': BASE / 'preferences.js',
+    'zotero-adapter.js': BASE / 'zotero-adapter.js',
     'manifest.json': BASE / 'manifest.json',
     'bootstrap.js': BASE / 'bootstrap.js',
     'runtime.js': BASE / 'runtime.js',
@@ -31,4 +33,3 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path)
     print(build(parser.parse_args().output))
-
