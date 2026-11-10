@@ -49,3 +49,10 @@ test('progress is emitted in batches and a late async read respects cancellation
  env.adapter.getChildren=async item=>{const result=await get(item);controller.abort();return result;};
  await assert.rejects(env.summary.collect({},'selected',{signal:controller.signal}),e=>e.name==='AbortError');
 });
+
+test('large summaries yield through the platform adapter without bootstrap timer globals',async()=>{
+ const env=setup();let yields=0;env.adapter.yield=async()=>{yields++;};
+ for(let n=10;n<65;n++)env.item(n,'N'+String(n).padStart(7,'0'),'note',1,{getNote:()=>'<p>x</p>'});
+ const summary=load(['summary.js'],{setTimeout:undefined}).ZESummary.create({adapter:env.adapter,htmlToText:x=>x});
+ const result=await summary.collect({},'selected',{});assert.equal(result.records.length,57);assert.ok(yields>0);
+});

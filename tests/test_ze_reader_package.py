@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import re
+import xml.etree.ElementTree as ET
 import tempfile
 import unittest
 import zipfile
@@ -37,6 +39,26 @@ class UnifiedPackageTests(unittest.TestCase):
                 self.assertEqual(set(archive.namelist()), set(builder.RUNTIME_FILES))
                 self.assertEqual(archive.read('reading-columns.js'), (BASE / 'plugins/reading-columns/reading-columns.js').read_bytes().replace(b'\r\n', b'\n'))
                 self.assertNotIn('bridge.token', archive.namelist())
+
+    def test_delivered_package_has_current_sources_and_complete_ui_resources(self):
+        builder = self.builder()
+        with zipfile.ZipFile(PLUGIN / 'ze-reader.xpi') as archive:
+            expected = {'manifest.json', 'bootstrap.js', 'runtime.js', 'reading-columns.js',
+                        'preferences.js', 'zotero-adapter.js', 'bridge.js', 'tab-groups.js',
+                        'summary.js', 'matrix.js', 'workbench.xhtml', 'workbench.js',
+                        'workbench.css', 'settings.xhtml', 'settings.js', 'locale/zh-CN/ze-reader.ftl'}
+            self.assertEqual(set(archive.namelist()), expected)
+            for name, source in builder.RUNTIME_FILES.items():
+                content = archive.read(name)
+                self.assertEqual(content, source.read_bytes().replace(b'\r\n', b'\n'))
+                self.assertNotIn(b'__BRIDGE_TOKEN__', content)
+                self.assertNotIn(b'C:/Users/Administrator', content)
+                self.assertNotIn(b'C:\\Users\\Administrator', content)
+            for name in ['workbench.xhtml', 'settings.xhtml']:
+                content = archive.read(name).decode('utf-8')
+                ET.fromstring(content)
+                for ref in re.findall(r'(?:src|href)="chrome://ze-reader/content/([^"]+)"', content):
+                    self.assertIn(ref, archive.namelist())
 
 if __name__ == '__main__':
     unittest.main()

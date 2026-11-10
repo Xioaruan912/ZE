@@ -1,5 +1,9 @@
 # ZE
 
+## ZE Reader 统一插件
+
+[ZE Reader 安装与使用](plugins/ze-reader/README.md) 将阅读路线列和 Translate Bridge 合并为一个 XPI，并新增标签页分组、笔记与标注汇总、文献矩阵。面向 Zotero 10.0.x；运行 `npm.cmd run build:plugin` 生成 `plugins/ze-reader/ze-reader.xpi`。旧独立插件仍保留兼容入口，建议新安装使用统一版。
+
 在浏览器里阅读自己的 Zotero 论文，支持电脑、iPad 和手机。
 
 > **Zotero 必须一直保持开启，ZE 也需要在主机上运行。** Zotero 关闭后，只能使用浏览器已有缓存、当前已打开的论文和未同步草稿；无法新开论文、刷新文库、同步标注或使用 CNKI。重新打开网页后，不保证还能读取 PDF；ZE 不会把论文文件长期缓存在浏览器里。

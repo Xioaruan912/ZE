@@ -65,7 +65,7 @@ var ZEWorkbench = {
    $('ze-count').textContent=tabs.length+' 个已打开 PDF';
   }
   async function refresh(){
-   const serial=++request;abort?.abort();abort=new AbortController();const signal=abort.signal;
+   const serial=++request;abort?.abort();abort=new doc.defaultView.AbortController();const signal=abort.signal;
    $('ze-count').textContent='正在读取…';
    try{
     if(view==='tabs'){await drawTabs(serial);return;}

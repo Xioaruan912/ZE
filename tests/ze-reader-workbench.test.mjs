@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {load,environment} from './ze-reader-fixtures.mjs';
 import {dom,settle} from './ze-reader-dom.mjs';
 const ids=['view-tabs','view-notes','view-matrix','pane-tabs','pane-notes','pane-matrix','ze-message','ze-scope','ze-refresh','ze-query','ze-kind','ze-color','ze-tag','ze-count','ze-records','ze-prev','ze-next','ze-page','ze-tabs','ze-group-list','ze-group-name','ze-save-group','ze-rename-group','ze-delete-group','ze-restore-group','ze-group-reset','ze-rules','ze-add-rule','ze-save-rules','ze-rules-reset','ze-matrix','ze-copy-matrix'];
-function setup({selected=true,collect}={}){
- const env=environment(),{doc,nodes}=dom(ids),scope=load(['preferences.js','matrix.js','workbench.js']),store=scope.ZEPreferences.create(env.Zotero);
+function setup({selected=true,collect,noBootstrapGlobals=false}={}){
+ const env=environment(),{doc,nodes}=dom(ids),scope=load(['preferences.js','matrix.js','workbench.js'],noBootstrapGlobals?{AbortController:undefined}:{}),store=scope.ZEPreferences.create(env.Zotero);
+ doc.defaultView.AbortController=AbortController;
  let copied='';
  const snapshot={papers:[{id:'1:A',title:'Paper'}],records:Array.from({length:55},(_,i)=>({id:String(i),paperID:'1:A',kind:'annotation',text:'text '+i,comment:'',color:'#ff0000',tags:['方法'],annotationType:'highlight',source:{}})),warnings:[]};
  const adapter={getScopeItems:async()=>selected?[{}]:[],selectTab(){},openSource:async()=>({}),sourceURL:()=> 'zotero://open-pdf/library/items/ABCDEFGH',copyText:text=>{copied=text;}};
@@ -20,6 +21,12 @@ test('workspace has separate views, explicit scope, search and 50-record paginat
  env.nodes.get('ze-query').value='text 54';await env.nodes.get('ze-query').fire('input');assert.equal(env.nodes.get('ze-records').children.length,1);
  await env.nodes.get('view-matrix').fire('click');assert.ok(env.nodes.get('ze-matrix').textContent.includes('规则'));
  env.controller.dispose();
+});
+
+test('workspace uses its document DOM constructors when bootstrap has no DOM globals',async()=>{
+ const env=setup({noBootstrapGlobals:true});await env.controller.ready;
+ assert.equal(env.nodes.get('ze-count').textContent,'1 个已打开 PDF');
+ await env.nodes.get('view-notes').fire('click');assert.equal(env.nodes.get('ze-records').children.length,50);env.controller.dispose();
 });
 test('late reads after a scope change or disposal never overwrite the current workspace',async()=>{
  const pending=[];const env=setup({collect:()=>new Promise(resolve=>pending.push(resolve))});await env.controller.ready;

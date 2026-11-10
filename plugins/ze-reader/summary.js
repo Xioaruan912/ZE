@@ -27,7 +27,7 @@ var ZESummary = {
       if(pageIndex!==undefined)source.pageIndex=pageIndex;
       records.push({id:identity(item),paperID,kind:'annotation',text:item.annotationText||'',comment:item.annotationComment||'',color:item.annotationColor||'',tags:(item.getTags?.()||[]).map(x=>x.tag),pageLabel:item.annotationPageLabel||'',annotationType:item.annotationType||'',source});
      }
-     if(records.length&&records.length%50===0){onProgress?.({papers:papers.length,records:records.length});await new Promise(resolve=>setTimeout(resolve,0));check();}
+     if(records.length&&records.length%50===0){onProgress?.({papers:papers.length,records:records.length});await adapter.yield?.();check();}
      if(item.isRegularItem?.()||(item.isAttachment?.()&&item.attachmentContentType==='application/pdf')){
       const children=await adapter.getChildren(item);check();
       for(const child of children)await visit(child,paperID,item.isAttachment?.()?item:attachment);
