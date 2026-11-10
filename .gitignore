@@ -38,6 +38,7 @@ node_modules/
 *.hash
 *.xpi
 !/plugins/reading-columns/reading-route-columns.xpi
+!/plugins/ze-reader/ze-reader.xpi
 *.building
 *.sqlite*
 *.db

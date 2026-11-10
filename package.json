@@ -13,6 +13,7 @@
   "private": true,
   "description": "ZE private Zotero paper reader",
   "scripts": {
+    "build:plugin": "python plugins/ze-reader/build.py",
     "build": "node scripts/build-frontend.mjs",
     "test": "node --test tests/*.test.mjs plugins/reading-columns/*.test.cjs"
   },
