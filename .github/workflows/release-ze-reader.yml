@@ -1,0 +1,42 @@
+name: Release ZE Reader
+on:
+  push:
+    tags:
+      - 'ze-reader-v*'
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Match tag to plugin version
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          version = json.loads(Path('plugins/ze-reader/manifest.json').read_text())['version']
+          assert os.environ['GITHUB_REF_NAME'] == 'ze-reader-v' + version, 'Tag and plugin version differ'
+          PY
+      - name: Build plugin and update manifest
+        run: python plugins/ze-reader/build.py
+      - name: Verify committed release artifacts
+        run: git diff --exit-code -- plugins/ze-reader/ze-reader.xpi plugins/ze-reader/updates.json
+      - name: Test native plugin
+        run: |
+          python -m unittest discover -s tests -p test_ze_reader_package.py
+          node --test plugins/reading-columns/*.test.cjs tests/ze-reader-*.test.mjs
+      - name: Publish installable package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            plugins/ze-reader/ze-reader.xpi plugins/ze-reader/updates.json \
+            --verify-tag --title "ZE Reader ${GITHUB_REF_NAME#ze-reader-v}" \
+            --notes-file plugins/ze-reader/RELEASE_NOTES.md

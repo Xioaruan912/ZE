@@ -1,10 +1,13 @@
 """Build native ZE Reader enhancements; never read private machine configuration."""
 import argparse
+import hashlib
+import json
 import zipfile
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 RUNTIME_FILES = {
+    'assets/icon.png': BASE / 'assets' / 'icon.png',
     'hover-preview.js': BASE / 'hover-preview.js',
     'tag-visibility.js': BASE / 'tag-visibility.js',
     'manifest.json': BASE / 'manifest.json',
@@ -23,10 +26,23 @@ def build(output=None):
                 entry.create_system = 3
                 entry.external_attr = 0o100644 << 16
                 entry.compress_type = zipfile.ZIP_DEFLATED
-                archive.writestr(entry, source.read_bytes().replace(b'\r\n', b'\n'), compresslevel=9)
+                content = source.read_bytes()
+                if name.endswith(('.js', '.json')):
+                    content = content.replace(b'\r\n', b'\n')
+                archive.writestr(entry, content, compresslevel=9)
         temporary.replace(output)
     finally:
         temporary.unlink(missing_ok=True)
+    manifest = json.loads(RUNTIME_FILES['manifest.json'].read_text(encoding='utf-8'))
+    settings = manifest['applications']['zotero']
+    update = {
+        'version': manifest['version'],
+        'update_link': 'https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v' + manifest['version'] + '/ze-reader.xpi',
+        'update_hash': 'sha256:' + hashlib.sha256(output.read_bytes()).hexdigest(),
+        'applications': {'zotero': {key: settings[key] for key in ('strict_min_version', 'strict_max_version')}},
+    }
+    updates = {'addons': {settings['id']: {'updates': [update]}}}
+    (output.parent / 'updates.json').write_text(json.dumps(updates, ensure_ascii=False, indent=2) + '\n', encoding='utf-8', newline='\n')
     return output
 
 if __name__ == '__main__':

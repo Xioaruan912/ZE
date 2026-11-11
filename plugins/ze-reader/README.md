@@ -1,4 +1,6 @@
-# ZE Reader 0.4.3
+# ZE Reader 0.4.4
+
+<img src="assets/icon.png" alt="ZE Reader：书页与阅读分支" width="96" />
 
 面向 Zotero 10.0.x，在原生文献列表和条目信息区提供阅读辅助，不需要独立工作台。
 
@@ -30,12 +32,20 @@
 
 ## 安装
 
-1. Zotero → 工具 → 插件 → 齿轮 → 从文件安装插件，选择 [ze-reader.xpi](ze-reader.xpi)。
+1. [下载 ze-reader.xpi](https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v0.4.4/ze-reader.xpi)，在 Zotero → 工具 → 插件 → 齿轮 → 从文件安装插件中选中它。
 2. 完全退出并重新启动 Zotero。
 3. 在文献列表表头右键，勾选“已读”“阅读顺序”“分支定位”。
 4. 需要修改路线信息时，使用列表上方搜索框左侧的“编辑／完成编辑”按钮。
 
-沿用 `reading-route-columns@local.example`，可覆盖 0.3.x 或旧阅读路线插件，保留已读标签、路线标签和列偏好。没有独立工作台或 ZE Reader 设置页，也不需要翻译插件、令牌和网页服务。更新仍采用手动安装 XPI。
+沿用 `reading-route-columns@local.example`，可覆盖 0.3.x 或旧阅读路线插件，保留已读标签、路线标签和列偏好。没有独立工作台或 ZE Reader 设置页，也不需要翻译插件、令牌和网页服务。
+
+## 自动更新
+
+0.4.4 开始使用 [Zotero 原生更新清单](https://www.zotero.org/support/dev/zotero_7_for_developers#updaterdf_updatesjson)，由 Zotero 插件管理器检查版本与下载安装。请保持插件管理器齿轮菜单的“自动更新插件”开启，也可以手动选择“检查更新”；需要能连接 GitHub。
+
+**0.4.3 及更早版本需要手动安装 0.4.4 一次**，因为这些版本的安装清单使用占位更新地址。安装本版后，后续升级可通过 Zotero 完成。插件不会修改 Zotero 全局更新偏好。
+
+稳定更新地址为 `https://raw.githubusercontent.com/Xioaruan912/ZE/plugin/plugins/ze-reader/updates.json`；安装包下载地址固定到版本对应的 GitHub Release，清单包含 SHA-256 校验和 Zotero 10.0.x 兼容范围。图标为透明 PNG，设计记录见 [图标说明](assets/README.md)。
 
 ## 从 0.3.0 移除的内容
 
@@ -51,4 +61,12 @@ npm.cmd test
 python -m unittest discover -s tests
 ```
 
-输出为 `plugins/ze-reader/ze-reader.xpi`。只打包 manifest、bootstrap、runtime、共享阅读列、悬浮预览及标签显示脚本六个文件；不含独立网页或设置资源。验证范围见 [VALIDATION.md](VALIDATION.md)。
+输出为 `plugins/ze-reader/ze-reader.xpi` 和同目录 `updates.json`。安装包包含六个脚本/清单文件与一个 PNG 图标，不含独立网页或设置资源。更新清单位于安装包之外，随安装包重新生成；图标以原始二进制打包，避免文本换行规范化破坏 PNG。验证范围见 [VALIDATION.md](VALIDATION.md)。
+
+## 发布后续版本
+
+1. 修改 `manifest.json` 版本，更新发布说明与测试中的版本断言。
+2. 运行构建和测试，将源码、`ze-reader.xpi`、`updates.json` 一起提交到 `plugin` 分支。
+3. 推送同一提交的 `ze-reader-v版本号` 标签，例如 `ze-reader-v0.4.4`。
+
+`.github/workflows/release-ze-reader.yml` 会检查标签、重新确定性构建并比对提交中的安装包/更新清单，运行原生插件测试，再发布 GitHub Release 的 `ze-reader.xpi` 与 `updates.json` 附件。工作流使用仓库内置 `GITHUB_TOKEN`，不需要把个人令牌放进插件或源码。旧提交继续保留在 Git 历史中，当前更新清单只提供最新版本。

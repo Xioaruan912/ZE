@@ -6,8 +6,8 @@ import {environment,plugin} from './ze-reader-fixtures.mjs';
 import {fileURLToPath} from 'node:url';
 test('delivered native enhancements load without workspace or translation resources',async()=>{
  const archive=fileURLToPath(new URL('ze-reader.xpi',plugin));
- const files=JSON.parse(execFileSync('python',['-X','utf8','-c',"import json,zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print(json.dumps({n:z.read(n).decode('utf-8') for n in z.namelist()}))",archive],{encoding:'utf8'}));
- assert.deepEqual(Object.keys(files).sort(),['bootstrap.js','hover-preview.js','manifest.json','reading-columns.js','runtime.js','tag-visibility.js']);
+ const {files,names}=JSON.parse(execFileSync('python',['-X','utf8','-c',"import json,zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print(json.dumps({'files':{n:z.read(n).decode('utf-8') for n in z.namelist() if n.endswith(('.js','.json'))},'names':z.namelist()}))",archive],{encoding:'utf8'}));
+ assert.deepEqual(names.sort(),['assets/icon.png','bootstrap.js','hover-preview.js','manifest.json','reading-columns.js','runtime.js','tag-visibility.js']);
  const env=environment(),rootURI='jar:file:///fixture.xpi!/',loads=[],forbidden=[];
  for(const name of ['Server','PreferencePanes'])Object.defineProperty(env.Zotero,name,{get(){forbidden.push(name);throw Error('removed feature accessed');}});
  const Services={scriptloader:{loadSubScript(uri,target){

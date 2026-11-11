@@ -1,12 +1,18 @@
 {
   "manifest_version": 2,
   "name": "ZE Reader",
-  "version": "0.4.3",
+  "version": "0.4.4",
+  "icons": {
+    "32": "assets/icon.png",
+    "64": "assets/icon.png",
+    "128": "assets/icon.png"
+  },
+  "homepage_url": "https://github.com/Xioaruan912/ZE/tree/plugin/plugins/ze-reader",
   "description": "可编辑阅读路线、PDF 悬浮预览与内部标签精简。",
   "applications": {
     "zotero": {
       "id": "reading-route-columns@local.example",
-      "update_url": "https://ze-reader.invalid/updates.json",
+      "update_url": "https://raw.githubusercontent.com/Xioaruan912/ZE/plugin/plugins/ze-reader/updates.json",
       "strict_min_version": "10.0",
       "strict_max_version": "10.0.*"
     }

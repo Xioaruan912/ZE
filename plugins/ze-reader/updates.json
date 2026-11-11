@@ -1,0 +1,19 @@
+{
+  "addons": {
+    "reading-route-columns@local.example": {
+      "updates": [
+        {
+          "version": "0.4.4",
+          "update_link": "https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v0.4.4/ze-reader.xpi",
+          "update_hash": "sha256:49df01783a95c23452bd803af45c96894a6b8d23747847e9dbda27b02af2797c",
+          "applications": {
+            "zotero": {
+              "strict_min_version": "10.0",
+              "strict_max_version": "10.0.*"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
