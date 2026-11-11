@@ -8,10 +8,10 @@ function controller(resolvePDF){
  const view={loading:(item)=>events.push(['loading',item.id]),pdf:att=>events.push(['pdf',att.id]),message:text=>events.push(['message',text]),hide:()=>events.push(['hide'])};
  return {api,timer,events,controller:api.create({resolvePDF,view,setTimeout:timer.setTimeout,clearTimeout:timer.clearTimeout})};
 }
-test('ordinary hovering does nothing and Alt activates one delayed preview',async()=>{
+test('ordinary hovering activates one delayed preview without a modifier key',async()=>{
  let calls=0;const env=controller(async item=>{calls++;return {attachment:item};}),item={id:1};
- env.controller.hover(item,{screenX:10,screenY:20},false);assert.equal(env.timer.size(),0);assert.equal(calls,0);
- env.controller.activate();env.controller.hover(item,{screenX:11,screenY:20},true);assert.equal(env.timer.size(),1);
+ env.controller.hover(item,{screenX:10,screenY:20});assert.equal(env.timer.size(),1);assert.equal(calls,0);
+ env.controller.hover(item,{screenX:11,screenY:20});assert.equal(env.timer.size(),1);
  env.timer.run(350);await settle();assert.equal(calls,1);assert.deepEqual(env.events.filter(x=>x[0]==='pdf'),[['pdf',1]]);env.controller.dispose();
 });
 test('late PDF resolutions cannot replace a newer hovered paper',async()=>{
@@ -95,13 +95,27 @@ test('a descendant blur keeps preview controls usable while actual window blur c
  await env.win.fire('blur',{target:env.win});assert.equal(panel.state,'closed');owner.dispose();
 });
 
-test('releasing Alt before the delay expires cancels native activation',async()=>{
+test('leaving the row before the hover delay cancels native activation',async()=>{
  const env=windowDOM(),timer=clock();Object.assign(env.win,timer);
  const item={id:1,isRegularItem:()=>true};env.win.ZoteroPane={itemsView:{id:'item-tree-main',getRow:()=>({ref:item})}};
  const owner=load(['hover-preview.js']).ZEHoverPreview.attach({Zotero:{},win:env.win});
  const target={closest:selector=>selector.startsWith('[id*')?{id:'item-tree-main-row-0'}:null};
- await env.doc.fire('mousemove',{target,altKey:false});await env.doc.fire('keydown',{key:'Alt'});await env.doc.fire('keyup',{key:'Alt'});
- timer.run(350);await settle();assert.equal(env.root.querySelector('panel'),null);assert.equal(timer.size(),0);owner.dispose();
+ await env.doc.fire('mousemove',{target});await env.doc.fire('mousemove',{target:env.doc});
+ timer.run(350);timer.run(220);await settle();assert.equal(env.root.querySelector('panel'),null);assert.equal(timer.size(),0);owner.dispose();
+});
+
+test('late native page stats enable navigation and synchronize the displayed and opened page',async()=>{
+ const env=windowDOM(),timer=clock();Object.assign(env.win,timer);const stats={},requests=[],opened=[];
+ const reader={_internalReader:{_state:{primaryViewStats:stats}},async _open(){return true;},canGoto:direction=>stats[direction==='prev'?'canNavigateToPreviousPage':'canNavigateToNextPage'],goto:direction=>requests.push(direction),uninit(){}};
+ const view=load(['hover-preview.js']).ZEHoverPreview.createView({Zotero:{Reader:{openPreview:async()=>reader,open:async(...args)=>opened.push(args)}},win:env.win});
+ const rendering=view.pdf({id:42},{}),browser=env.root.querySelector('browser');browser.contentDocument={documentURI:'resource://zotero/reader/reader.html'};
+ await browser.fire('DOMContentLoaded',{target:browser.contentDocument});await rendering;
+ const buttons=env.root.querySelectorAll('button'),prev=buttons.find(x=>x.textContent==='上一页'),next=buttons.find(x=>x.textContent==='下一页');assert.equal(next.disabled,true);
+ Object.assign(stats,{pageIndex:0,pagesCount:3,canNavigateToPreviousPage:false,canNavigateToNextPage:true});timer.run(200);assert.equal(next.disabled,false);
+ await next.fire('click');assert.deepEqual(requests,['next']);assert.match(env.root.querySelector('[role]').textContent,/第 1 页/);
+ Object.assign(stats,{pageIndex:1,canNavigateToPreviousPage:true});timer.run(200);assert.equal(prev.disabled,false);assert.match(env.root.querySelector('[role]').textContent,/第 2 页/);
+ await prev.fire('click');assert.deepEqual(requests,['next','prev']);Object.assign(stats,{pageIndex:0,canNavigateToPreviousPage:false});timer.run(200);
+ assert.equal(prev.disabled,true);await buttons.find(x=>x.textContent==='打开 PDF').fire('click');assert.equal(opened[0][1].pageIndex,0);assert.equal(timer.size(),0);view.dispose();
 });
 
 for(const rejects of [false,true])test('closing during native initialization defers first uninit and removes late observers on '+(rejects?'rejection':'success'),async()=>{

@@ -111,3 +111,21 @@ test('Chinese composition confirmation and cancellation do not submit or restore
  await input.handlers.compositionend(event());await input.handlers.keydown({...event('Enter'),keyCode:229});assert.equal(item.saves,0);
  await input.handlers.keydown(event('Enter'));assert.equal(item.saves,1);assert.equal(input.value,'核心 · 正在输入');await api.stop();
 });
+
+test('editable first-column cells provide the native cell-text wrapper and retain live input handlers',async()=>{
+ const api=load(),item=paper(['阅读顺序-02访问控制-03-奠基-KPABE2006']),env=ui(item);await api.start(env.Zotero);
+ for(const name of ['order','position']){
+  const cell=env.definitions.find(c=>c.dataKey===name).renderCell(0,'',{},true,env.doc);
+  const content=cell.children.find(node=>(node.className||'').split(' ').includes('cell-text'));
+  assert.ok(content,'native first-column processing reparses innerHTML unless cell-text already exists');
+  const input=content.children[0];assert.ok(input.handlers.keydown);assert.ok(input.value);
+  input.value=name==='order'?'4':'核心 · 手动定位';await input.handlers.keydown(event('Enter'));
+ }
+ assert.equal(api.display(item.getTags(),'BJED65AU').order,'04');assert.equal(api.display(item.getTags(),'BJED65AU').position,'核心 · 手动定位');await api.stop();
+});
+
+test('an unnumbered paper prompts for a manual position rather than claiming automatic positioning',async()=>{
+ const api=load(),env=ui(paper());await api.start(env.Zotero);
+ const input=env.definitions.find(c=>c.dataKey==='position').renderCell(0,'',{},false,env.doc).children[0];
+ assert.equal(input.value,'');assert.equal(input.placeholder,'填写定位');await api.stop();
+});

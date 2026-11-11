@@ -18,7 +18,7 @@ class UnifiedPackageTests(unittest.TestCase):
     def test_unified_manifest_upgrades_route_plugin(self):
         manifest = json.loads((PLUGIN / 'manifest.json').read_text(encoding='utf-8'))
         self.assertEqual(manifest['name'], 'ZE Reader')
-        self.assertEqual(manifest['version'], '0.4.0')
+        self.assertEqual(manifest['version'], '0.4.1')
         settings = manifest['applications']['zotero']
         self.assertEqual(settings['id'], 'reading-route-columns@local.example')
         self.assertEqual(settings['strict_max_version'], '10.0.*')

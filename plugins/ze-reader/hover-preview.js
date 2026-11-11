@@ -32,23 +32,23 @@ var ZEHoverPreview = {
   }
   function leave(){if(disposed)return;clearStart();if(hideTimer!==null)return;hideTimer=setTimeout(()=>{hideTimer=null;close();},220);}
   return {
-   hover(item,point,altKey){
+   hover(item,point){
     if(disposed)return;if(!item){leave();return;}clearHide();
     if(current?.item!==item){close();current={item,point,started:false};}else current.point=point;
-    if(altKey)activate();
-   },activate,releaseAlt:clearStart,leave,enterPopup:clearHide,close,
+    activate();
+   },leave,enterPopup:clearHide,close,
    dispose(){if(disposed)return;disposed=true;close();}
   };
  },
  createView({Zotero,win,onEnter,onLeave,onClose}){
   const doc=win.document,timers=new Set();let panel=null,title=null,status=null,body=null,prev=null,next=null,open=null;
-  let browser=null,reader=null,session=null,attachment=null,page=1,visible=false,disposed=false,generation=0,cancelLoad=null;
+  let browser=null,reader=null,session=null,attachment=null,page=1,visible=false,disposed=false,generation=0,cancelLoad=null,refreshTimer=null;
   const element=(name,text)=>{const node=doc.createElementNS('http://www.w3.org/1999/xhtml',name);if(text!==undefined)node.textContent=text;return node;};
   const uninit=value=>{try{value?.uninit();}catch{}};
   const finishSession=value=>{if(!value.closed){value.closed=true;uninit(value.reader);}};
   function dropReader(){
    generation++;cancelLoad?.();cancelLoad=null;
-   for(const timer of timers)win.clearTimeout(timer);timers.clear();
+   for(const timer of timers)win.clearTimeout(timer);timers.clear();refreshTimer=null;
    if(session){session.retired=true;if(!session.opening)finishSession(session);session=null;}
    reader=null;browser?.remove();browser=null;
   }
@@ -64,7 +64,7 @@ var ZEHoverPreview = {
    prev.addEventListener('click',()=>go('prev'));next.addEventListener('click',()=>go('next'));
    close.addEventListener('click',()=>onClose?onClose():api.hide());
    open.addEventListener('click',async()=>{
-    const item=attachment,index=page-1;if(!item)return;onClose?onClose():api.hide();
+    const item=attachment,index=pageIndex()??page-1;if(!item)return;onClose?onClose():api.hide();
     try{await Zotero.Reader.open(item.id,{pageIndex:index},{allowDuplicate:false});}catch{win.alert?.('无法打开 PDF，请检查附件文件是否可用。');}
    });
    box.append(title,actions,status,body);panel.appendChild(box);
@@ -81,11 +81,17 @@ var ZEHoverPreview = {
    }
    return true;
   }
-  function update(){if(!reader||!visible)return;status.textContent='第 '+page+' 页';prev.disabled=!reader.canGoto('prev');next.disabled=!reader.canGoto('next');}
+  function pageIndex(){const index=reader?._internalReader?._state?.primaryViewStats?.pageIndex;return Number.isInteger(index)&&index>=0?index:null;}
+  function update(){if(!reader||!visible)return;const index=pageIndex();if(index!==null)page=index+1;status.textContent='第 '+page+' 页';prev.disabled=!reader.canGoto('prev');next.disabled=!reader.canGoto('next');}
+  function scheduleUpdate(){
+   if(disposed||!reader||!visible||refreshTimer!==null)return;
+   const token=generation,timer=win.setTimeout(()=>{
+    timers.delete(timer);if(refreshTimer===timer)refreshTimer=null;
+    if(!disposed&&token===generation&&reader&&visible){update();scheduleUpdate();}
+   },200);refreshTimer=timer;timers.add(timer);
+  }
   function go(direction){
-   if(!reader?.canGoto(direction))return;reader.goto(direction);page+=direction==='next'?1:-1;
-   status.textContent='第 '+page+' 页';const token=generation;
-   const timer=win.setTimeout(()=>{timers.delete(timer);if(!disposed&&token===generation)update();},150);timers.add(timer);
+   if(!reader?.canGoto(direction))return;const index=pageIndex();reader.goto(direction);if(index===null)page=Math.max(1,page+(direction==='next'?1:-1));update();scheduleUpdate();
   }
   const api={
    loading(item,point){if(!show(point))return;dropReader();attachment=null;prev.disabled=true;next.disabled=true;open.disabled=true;title.textContent=item.getDisplayTitle?.()||item.getField?.('title')||'PDF 预览';status.textContent='正在读取本机 PDF…';},
@@ -113,7 +119,7 @@ var ZEHoverPreview = {
      localSession={reader:localReader,opening:true,retired:false,closed:false};session=localSession;reader=localReader;
      const success=await localReader._open({location:{pageIndex:0}});
      if(disposed||token!==generation)return;
-     if(!success){api.message('此 PDF 无法预览，可点击“打开 PDF”。',point);return;}update();
+     if(!success){api.message('此 PDF 无法预览，可点击“打开 PDF”。',point);return;}update();scheduleUpdate();
     }catch{
      if(!localSession)uninit(localReader);if(!disposed&&token===generation)api.message('预览失败，可点击“打开 PDF”。',point);
     }finally{
@@ -140,10 +146,9 @@ var ZEHoverPreview = {
    if(node?.id?.startsWith(prefix)&&/^\d+$/.test(node.id.slice(prefix.length))&&!editing(event.target)){
     const row=tree.getRow(Number(node.id.slice(prefix.length)));if(row?.ref?.isRegularItem?.()||row?.ref?.isAttachment?.())item=row.ref;
    }
-   controller.hover(item,{screenX:event.screenX,screenY:event.screenY},event.altKey);
+   controller.hover(item,{screenX:event.screenX,screenY:event.screenY});
   });
-  on(doc,'keydown',event=>{if(event.key==='Escape'&&view.visible){event.preventDefault();event.stopPropagation();controller.close();}else if(event.key==='Alt'&&!editing(event.target))controller.activate();});
-  on(doc,'keyup',event=>{if(event.key==='Alt'){controller.releaseAlt();if(view.visible){event.preventDefault();event.stopPropagation();}}});
+  on(doc,'keydown',event=>{if(event.key==='Escape'&&view.visible){event.preventDefault();event.stopPropagation();controller.close();}});
   on(doc,'mousedown',event=>{if(!view.contains(event.target))controller.close();});on(doc,'wheel',()=>controller.close());
   on(win,'blur',event=>{if(event.target===win||(typeof doc.hasFocus==='function'&&!doc.hasFocus()))controller.close();});
   return {dispose(){for(const remove of listeners)remove();controller.dispose();view.dispose();}};

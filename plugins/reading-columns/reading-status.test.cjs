@@ -108,11 +108,11 @@ test('read checkbox works in unconfigured collections and survives rerender afte
  await api.start(env.zotero);const column=env.definitions.find(c=>c.dataKey==='read');
  assert.ok(column,'read column must exist');
  const render=()=>column.renderCell(0,column.dataProvider(paper),{className:'reading-read'},true,env.document);
- const cell=render(),box=cell.children[0];
+ const cell=render(),box=cell.children[0].children[0];
  assert.equal(box.type,'checkbox');assert.equal(box.checked,true);assert.ok(box.attributes['aria-label']);
  box.checked=false;await box.handlers.change({stopPropagation(){}});
  assert.equal(api.isRead(paper),false);assert.equal(paper.saved.length,1);
- env.win.collection='BJED65AU';assert.equal(render().children[0].checked,false);
+ env.win.collection='BJED65AU';assert.equal(render().children[0].children[0].checked,false);
  assert.equal(env.alerts.length,0);await api.stop();
 });
 test('save failure restores the checkbox and reports that the change was not saved',async()=>{
@@ -146,4 +146,12 @@ test('layout migration preserves later manual choices after reloading the plugin
  await api.start(env.zotero);
  assert.equal(env.columns.find(c=>c.dataKey==='order').hidden,false);
  await api.stop();
+});
+
+test('the first-column read checkbox is kept inside the native cell-text container',async()=>{
+ const api=load(),paper=item({tags:[READ_TAG]}),env=environment(paper);await api.start(env.zotero);
+ const column=env.definitions.find(c=>c.dataKey==='read'),cell=column.renderCell(0,'1',{},true,env.document);
+ const content=cell.children.find(node=>(node.className||'').split(' ').includes('cell-text'));assert.ok(content);
+ const checkbox=content.children[0];assert.equal(checkbox.checked,true);checkbox.checked=false;await checkbox.handlers.change({stopPropagation(){}});
+ assert.equal(api.isRead(paper),false);await api.stop();
 });

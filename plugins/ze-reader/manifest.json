@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "ZE Reader",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "可编辑阅读路线、PDF 悬浮预览与内部标签精简。",
   "applications": {
     "zotero": {

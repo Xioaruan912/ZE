@@ -119,6 +119,14 @@ var ReadingColumns = (() => {
       catch(error) {zotero.logError(error);}
     }
   }
+  function appendCellControl(span,control,isFirst,doc) {
+    if(isFirst){
+      const content=doc.createElement('span');content.className='cell-text';
+      Object.assign(content.style,{display:'flex',alignItems:'center',justifyContent:'center',flex:'1 1 auto',minWidth:'0'});
+      content.appendChild(control);span.appendChild(content);
+    }else span.appendChild(control);
+    return span;
+  }
   function renderReadCell(index,data,column,isFirst,doc) {
     const span=doc.createElement('span');
     span.className='cell '+(column.className || '');
@@ -156,8 +164,7 @@ var ReadingColumns = (() => {
         updateTitle();
       }
     });
-    span.appendChild(checkbox);
-    return span;
+    return appendCellControl(span,checkbox,isFirst,doc);
   }
   function selected(win) {
     try { return win.ZoteroPane.getSelectedCollection()?.key || ''; } catch {return '';}
@@ -166,11 +173,12 @@ var ReadingColumns = (() => {
     const span=doc.createElement('span');span.className='cell '+(column.className||'');
     const win=doc.defaultView,item=win.ZoteroPane?.itemsView?.getRow(index)?.ref,collectionKey=selected(win);
     if(!canMarkRead(item)||!branches[collectionKey]){span.textContent=item?value(item,win)[name]:data;return span;}
+    Object.assign(span.style,{display:'flex',alignItems:'center'});
     const isOrder=name==='order',label=isOrder?'阅读顺序':'分支定位';
     const input=doc.createElementNS('http://www.w3.org/1999/xhtml','input');
     let composing=false;
-    input.type='text';input.maxLength=isOrder?2:120;input.size=isOrder?2:20;input.placeholder=isOrder?'—':'自动定位';if(isOrder)input.setAttribute('inputmode','numeric');input.setAttribute('aria-label',label);
-    input.title=isOrder?'输入 01–99；Enter 或离开输入框保存，Esc 取消，留空清除':'输入阶段或自己的定位；Enter 或离开输入框保存，Esc 取消，留空恢复自动定位';
+    input.type='text';input.maxLength=isOrder?2:120;input.size=isOrder?2:20;input.placeholder=isOrder?'—':'填写定位';if(isOrder)input.setAttribute('inputmode','numeric');input.setAttribute('aria-label',label);
+    input.title=isOrder?'输入 01–99；Enter 或离开输入框保存，Esc 取消，留空清除':'输入自己的定位；Enter 或离开输入框保存，Esc 取消；留空时显示路线标签对应的默认定位（如有）';
     Object.assign(input.style,{width:'100%',minWidth:'0',boxSizing:'border-box',font:'inherit',color:'inherit',background:'transparent',border:'1px solid GrayText',borderRadius:'3px',textAlign:isOrder?'center':'left'});
     const restore=()=>{input.value=display(item.getTags(),collectionKey)[name];};restore();
     const save=async()=>{
@@ -189,7 +197,7 @@ var ReadingColumns = (() => {
       if(event.key==='Enter'){event.preventDefault();await save();}
       else if(event.key==='Escape'){event.preventDefault();restore();}
     });
-    input.addEventListener('blur',save);span.appendChild(input);return span;
+    input.addEventListener('blur',save);return appendCellControl(span,input,isFirst,doc);
   }
   function value(item,win) {
     if(!item || item.parentID) return {order:'',position:'',read:''};
