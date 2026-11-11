@@ -1,10 +1,12 @@
-"""Build the lightweight ZE Reader XPI; never read private machine configuration."""
+"""Build native ZE Reader enhancements; never read private machine configuration."""
 import argparse
 import zipfile
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 RUNTIME_FILES = {
+    'hover-preview.js': BASE / 'hover-preview.js',
+    'tag-visibility.js': BASE / 'tag-visibility.js',
     'manifest.json': BASE / 'manifest.json',
     'bootstrap.js': BASE / 'bootstrap.js',
     'runtime.js': BASE / 'runtime.js',

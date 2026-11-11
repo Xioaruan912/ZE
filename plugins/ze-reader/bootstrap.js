@@ -3,7 +3,7 @@ function install() {}
 async function startup({id,rootURI}) {
  await Zotero.initializationPromise;
  zeScope={};
- for(const file of ['reading-columns.js','runtime.js']) Services.scriptloader.loadSubScript(rootURI+file,zeScope);
+ for(const file of ['reading-columns.js','hover-preview.js','tag-visibility.js','runtime.js']) Services.scriptloader.loadSubScript(rootURI+file,zeScope);
  zeScope.runtime=zeScope.ZERuntime.create({Zotero,id});
  await zeScope.runtime.start();
 }

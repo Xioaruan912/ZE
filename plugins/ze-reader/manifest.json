@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "ZE Reader",
-  "version": "0.3.2",
-  "description": "在文献列表中显示已读、阅读顺序与分支定位。",
+  "version": "0.4.0",
+  "description": "可编辑阅读路线、PDF 悬浮预览与内部标签精简。",
   "applications": {
     "zotero": {
       "id": "reading-route-columns@local.example",

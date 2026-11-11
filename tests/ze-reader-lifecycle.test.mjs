@@ -16,3 +16,21 @@ test('a failed column registration is reported and partial registration is remov
  const scope=load(['reading-columns.js','runtime.js']),runtime=scope.ZERuntime.create({...env,Services:{},id:'test',rootURI:'test:/'});
  await runtime.start();assert.equal(runtime.status().columns.state,'error');assert.equal(env.registered.size,0);await runtime.stop();
 });
+
+test('native enhancements attach once per window and release resources on reload',async()=>{
+ const env=environment();env.win.document={};const attached=[],disposed=[];
+ const scope=load(['reading-columns.js','runtime.js'],{
+ ZEHoverPreview:{attach:({win})=>{attached.push(['preview',win]);return {dispose(){disposed.push('preview');}};}},
+ ZETagVisibility:{attach:({win})=>{attached.push(['tags',win]);return {dispose(){disposed.push('tags');}};}}
+ });
+ const runtime=scope.ZERuntime.create({...env,id:'test'});await runtime.start();await runtime.setupWindow(env.win);
+ assert.equal(attached.length,2);runtime.releaseWindow(env.win);assert.deepEqual(disposed.sort(),['preview','tags']);
+ await runtime.setupWindow(env.win);assert.equal(attached.length,4);await runtime.stop();assert.equal(disposed.length,4);assert.equal(env.timers.size,0);
+});
+
+test('a native enhancement failure does not disable the reading columns or the other enhancement',async()=>{
+ const env=environment();env.win.document={};let tags=0;
+ const scope=load(['reading-columns.js','runtime.js'],{ZEHoverPreview:{attach(){throw Error('unsupported');}},ZETagVisibility:{attach(){tags++;return {dispose(){}};}}});
+ const runtime=scope.ZERuntime.create({...env,id:'test'});await runtime.start();
+ assert.equal(env.registered.size,3);assert.equal(tags,1);assert.equal(runtime.status().preview.state,'unavailable');await runtime.stop();
+});

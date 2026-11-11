@@ -25,11 +25,13 @@ var ReadingColumns = (() => {
   function display(tags,collectionKey) {
     const branch=branches[collectionKey];
     if(!branch) return {order:'',position:''};
+    const positionPrefix='阅读定位-'+branch+'-';
+    const override=tags.map(tag=>typeof tag==='string'?tag:tag.tag).find(tag=>tag.startsWith(positionPrefix))?.slice(positionPrefix.length)||'';
     for(const tag of tags) {
       const m=/^阅读顺序-([^-]+)-(\d{2})-([^-]+)-(.+)$/.exec(typeof tag==='string'?tag:tag.tag);
-      if(m && m[1]===branch) return {order:m[2],position:m[3]+' · '+role(branch.slice(0,2),Number(m[2]))};
+      if(m && m[1]===branch) return {order:m[2],position:override||m[3]+' · '+role(branch.slice(0,2),Number(m[2]))};
     }
-    return {order:'',position:''};
+    return {order:'',position:override};
   }
   const READ_TAG='阅读状态-已读';
   const LAYOUT_PREF='extensions.zotero.readingRouteColumns.layoutVersion';
@@ -90,6 +92,27 @@ var ReadingColumns = (() => {
     try {await task;}
     finally {if(writes.get(item)===task)writes.delete(item);}
   }
+  async function setPosition(item,collectionKey,input) {
+    if(!canMarkRead(item))throw new Error('只能为论文或独立 PDF 设置分支定位');
+    const branch=branches[collectionKey];if(!branch)throw new Error('当前分类尚未配置阅读路线');
+    if(typeof input!=='string'||/[\x00-\x1f\x7f]/.test(input)||input.trim().length>120)throw new Error('分支定位应为不超过 120 字符的单行内容');
+    const text=input.trim(),prefix='阅读定位-'+branch+'-';
+    const previous=writes.get(item)||Promise.resolve();
+    const task=previous.catch(()=>{}).then(async()=>{
+      const old=item.getTags().filter(tag=>tag.tag.startsWith(prefix)),next=text?prefix+text:'';
+      if((!next&&!old.length)||(old.length===1&&old[0].tag===next))return;
+      try {
+        for(const tag of old)item.removeTag(tag.tag);
+        if(next)item.addTag(next,0);
+        await item.saveTx();
+      }catch(error){
+        if(next)item.removeTag(next);
+        for(const tag of old)item.addTag(tag.tag,tag.type);
+        throw error;
+      }
+    });
+    writes.set(item,task);try{await task;}finally{if(writes.get(item)===task)writes.delete(item);}
+  }
   async function refreshWindows() {
     for(const win of windows.keys()) {
       try {if(!win.closed) await win.ZoteroPane?.itemsView?.refreshAndMaintainSelection();}
@@ -139,21 +162,22 @@ var ReadingColumns = (() => {
   function selected(win) {
     try { return win.ZoteroPane.getSelectedCollection()?.key || ''; } catch {return '';}
   }
-  function renderOrderCell(index,data,column,isFirst,doc) {
+  function renderRouteCell(name,index,data,column,isFirst,doc) {
     const span=doc.createElement('span');span.className='cell '+(column.className||'');
     const win=doc.defaultView,item=win.ZoteroPane?.itemsView?.getRow(index)?.ref,collectionKey=selected(win);
-    if(!canMarkRead(item)||!branches[collectionKey]){span.textContent=item?value(item,win).order:data;return span;}
+    if(!canMarkRead(item)||!branches[collectionKey]){span.textContent=item?value(item,win)[name]:data;return span;}
+    const isOrder=name==='order',label=isOrder?'阅读顺序':'分支定位';
     const input=doc.createElementNS('http://www.w3.org/1999/xhtml','input');
-    input.type='text';input.maxLength=2;input.size=2;input.placeholder='—';input.setAttribute('inputmode','numeric');input.setAttribute('aria-label','阅读顺序');
-    input.title='输入 01–99；Enter 或离开输入框保存，Esc 取消，留空清除';
-    Object.assign(input.style,{width:'100%',minWidth:'0',boxSizing:'border-box',font:'inherit',color:'inherit',background:'transparent',border:'1px solid GrayText',borderRadius:'3px',textAlign:'center'});
-    const restore=()=>{input.value=display(item.getTags(),collectionKey).order;};restore();
+    input.type='text';input.maxLength=isOrder?2:120;input.size=isOrder?2:20;input.placeholder=isOrder?'—':'自动定位';if(isOrder)input.setAttribute('inputmode','numeric');input.setAttribute('aria-label',label);
+    input.title=isOrder?'输入 01–99；Enter 或离开输入框保存，Esc 取消，留空清除':'输入阶段或自己的定位；Enter 或离开输入框保存，Esc 取消，留空恢复自动定位';
+    Object.assign(input.style,{width:'100%',minWidth:'0',boxSizing:'border-box',font:'inherit',color:'inherit',background:'transparent',border:'1px solid GrayText',borderRadius:'3px',textAlign:isOrder?'center':'left'});
+    const restore=()=>{input.value=display(item.getTags(),collectionKey)[name];};restore();
     const save=async()=>{
       if(input.disabled)return;
-      if(input.value===display(item.getTags(),collectionKey).order)return;
+      if(input.value===display(item.getTags(),collectionKey)[name])return;
       const draft=input.value;input.disabled=true;
-      try {await setOrder(item,collectionKey,draft);await refreshWindows();}
-      catch(error){zotero.logError(error);win.alert('阅读顺序未保存。\n'+String(error.message||error));}
+      try {await (isOrder?setOrder:setPosition)(item,collectionKey,draft);await refreshWindows();}
+      catch(error){zotero.logError(error);win.alert(label+'未保存。\n'+String(error.message||error));}
       finally {restore();input.disabled=false;}
     };
     for(const type of ['mousedown','click','dblclick'])input.addEventListener(type,event=>event.stopPropagation());
@@ -213,14 +237,7 @@ var ReadingColumns = (() => {
         dataKey:name,label,pluginID,width,minWidth:60,enabledTreeIDs:['main'],
         zoteroPersist:['width','hidden','sortDirection'],
         dataProvider:item=>value(item,Zotero.getMainWindow())[name],
-        renderCell:name==='read'?renderReadCell:name==='order'?renderOrderCell:(index,data,column,isFirst,doc)=>{
-          const span=doc.createElement('span');
-          span.className='cell '+(column.className || '');
-          const item=doc.defaultView.ZoteroPane?.itemsView?.getRow(index)?.ref;
-          span.textContent=item?value(item,doc.defaultView)[name]:data;
-          span.title=span.textContent;
-          return span;
-        }
+        renderCell:name==='read'?renderReadCell:(...args)=>renderRouteCell(name,...args)
       });
       if(!key) throw new Error('Could not register '+label);
       keys.push(key);
@@ -238,5 +255,5 @@ var ReadingColumns = (() => {
     for(const key of keys) await zotero.ItemTreeManager.unregisterColumn(key);
     keys=[];
   }
-  return {display,isRead,setRead,setOrder,start,stop,setupWindow,releaseWindow};
+  return {display,isRead,setRead,setOrder,setPosition,start,stop,setupWindow,releaseWindow};
 })();

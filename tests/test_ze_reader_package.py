@@ -18,7 +18,7 @@ class UnifiedPackageTests(unittest.TestCase):
     def test_unified_manifest_upgrades_route_plugin(self):
         manifest = json.loads((PLUGIN / 'manifest.json').read_text(encoding='utf-8'))
         self.assertEqual(manifest['name'], 'ZE Reader')
-        self.assertEqual(manifest['version'], '0.3.2')
+        self.assertEqual(manifest['version'], '0.4.0')
         settings = manifest['applications']['zotero']
         self.assertEqual(settings['id'], 'reading-route-columns@local.example')
         self.assertEqual(settings['strict_max_version'], '10.0.*')
@@ -38,10 +38,10 @@ class UnifiedPackageTests(unittest.TestCase):
                 self.assertEqual(archive.read('reading-columns.js'), (BASE / 'plugins/reading-columns/reading-columns.js').read_bytes().replace(b'\r\n', b'\n'))
                 self.assertNotIn('bridge.token', archive.namelist())
 
-    def test_delivered_package_has_current_sources_and_only_reading_resources(self):
+    def test_delivered_package_has_current_sources_and_only_native_reading_resources(self):
         builder = self.builder()
         with zipfile.ZipFile(PLUGIN / 'ze-reader.xpi') as archive:
-            expected = {'manifest.json', 'bootstrap.js', 'runtime.js', 'reading-columns.js'}
+            expected = {'manifest.json', 'bootstrap.js', 'runtime.js', 'reading-columns.js', 'hover-preview.js', 'tag-visibility.js'}
             self.assertEqual(set(archive.namelist()), expected)
             for name, source in builder.RUNTIME_FILES.items():
                 content = archive.read(name)

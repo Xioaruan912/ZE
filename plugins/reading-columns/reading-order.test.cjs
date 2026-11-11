@@ -70,3 +70,33 @@ test('read and route writes on one paper serialize rather than overwrite each ot
  const order=api.setOrder(item,'BJED65AU','2');await started;const read=api.setRead(item,true);
  assert.equal(calls,1);release();await Promise.all([order,read]);assert.equal(api.isRead(item),true);assert.equal(api.display(item.getTags(),'BJED65AU').order,'02');
 });
+
+test('a custom branch position overrides the automatic text and survives renumbering',async()=>{
+ const api=load(),item=paper(['阅读顺序-02访问控制-03-奠基-KPABE2006','阅读顺序-90证明工具-06-核心-ZK']);
+ await api.setPosition(item,'BJED65AU','核心 · 标准模型下的构造');
+ assert.equal(api.display(item.getTags(),'BJED65AU').position,'核心 · 标准模型下的构造');
+ assert.equal(api.display(item.getTags(),'K57JIGUF').position,'核心 · 零知识与证明工具');
+ await api.setOrder(item,'BJED65AU','9');assert.equal(api.display(item.getTags(),'BJED65AU').position,'核心 · 标准模型下的构造');
+ await api.setPosition(item,'BJED65AU','');assert.equal(api.display(item.getTags(),'BJED65AU').position,'奠基 · 标准模型与完全安全证明');
+});
+
+test('position edits work without a number and reject control characters or excessive length',async()=>{
+ const api=load(),item=paper(['原有标签']);await api.setPosition(item,'BJED65AU','参考');
+ assert.equal(api.display(item.getTags(),'BJED65AU').order,'');assert.equal(api.display(item.getTags(),'BJED65AU').position,'参考');
+ for(const value of ['x\ny','x\ty','x'.repeat(121)])await assert.rejects(api.setPosition(item,'BJED65AU',value),/120|单行/);
+ await assert.rejects(api.setPosition(item,'UNKNOWN','参考'),/分类/);assert.equal(item.saves,1);
+});
+
+test('failed position writes restore the original override and unrelated tags',async()=>{
+ const api=load(),original=[{tag:'阅读定位-02访问控制-核心 · 原定位',type:1},{tag:'原有标签',type:0}],item=paper(original,async()=>{throw Error('read only');});
+ await assert.rejects(api.setPosition(item,'BJED65AU','参考'),/read only/);
+ assert.deepEqual(item.getTags().sort((a,b)=>a.tag.localeCompare(b.tag)),original.sort((a,b)=>a.tag.localeCompare(b.tag)));
+});
+
+test('position cells accept direct text and clearing restores the automatic position',async()=>{
+ const api=load(),item=paper(['阅读顺序-02访问控制-03-奠基-KPABE2006']),env=ui(item);await api.start(env.Zotero);
+ const input=env.definitions.find(c=>c.dataKey==='position').renderCell(0,'',{},false,env.doc).children[0];assert.ok(input,'position must be editable');
+ input.value='进阶 · 我自己的定位';await input.handlers.keydown(event('Enter'));assert.equal(input.value,'进阶 · 我自己的定位');
+ input.value='取消';await input.handlers.keydown(event('Escape'));assert.equal(input.value,'进阶 · 我自己的定位');
+ input.value='';await input.handlers.blur(event());assert.equal(input.value,'奠基 · ABE构造主线');await api.stop();
+});
