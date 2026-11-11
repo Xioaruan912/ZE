@@ -1,6 +1,6 @@
 var ZERuntime = {
- create({Zotero,id}) {
-  let started=false;
+ create({Zotero,id,cloneInto}) {
+  let started=false,pins=null;
   const states={},enhancements=new Map();
   const runtime={
    async start(){
@@ -13,6 +13,10 @@ var ZERuntime = {
     }catch{
      await ReadingColumns.stop();states.columns={state:'error',message:'阅读列初始化失败'};
      Zotero.logError(new Error(states.columns.message));
+    }
+    if(typeof ZEPins!=='undefined'){
+     try{pins=ZEPins.create({Zotero,id,cloneInto});pins.start();states.pins={state:'ready'};}
+     catch(error){pins?.dispose();pins=null;states.pins={state:'unavailable'};Zotero.logError(error);}
     }
     for(const win of Zotero.getMainWindows())await runtime.setupWindow(win);
    },
@@ -29,6 +33,7 @@ var ZERuntime = {
     }
    },
    releaseWindow(win){
+    pins?.releaseWindow(win);
     for(const controller of enhancements.get(win)||[]){try{controller.dispose();}catch{Zotero.logError(new Error('ZE Reader 窗口资源清理失败'));}}
     enhancements.delete(win);ReadingColumns.releaseWindow(win);
    },
@@ -36,6 +41,7 @@ var ZERuntime = {
    async stop(){
     if(!started)return;started=false;
     for(const win of [...enhancements.keys()])runtime.releaseWindow(win);
+    pins?.dispose();pins=null;
     await ReadingColumns.stop();
     if(Zotero.ReadingRouteColumns===ReadingColumns)delete Zotero.ReadingRouteColumns;
    }

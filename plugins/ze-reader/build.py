@@ -10,6 +10,7 @@ RUNTIME_FILES = {
     'assets/icon.png': BASE / 'assets' / 'icon.png',
     'hover-preview.js': BASE / 'hover-preview.js',
     'tag-visibility.js': BASE / 'tag-visibility.js',
+    'pins.js': BASE / 'pins.js',
     'manifest.json': BASE / 'manifest.json',
     'bootstrap.js': BASE / 'bootstrap.js',
     'runtime.js': BASE / 'runtime.js',

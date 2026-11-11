@@ -7,12 +7,13 @@ export function load(names,extra={}){
  return scope;
 }
 export function environment(){
- const prefs=new Map([['extensions.zotero.readingRouteColumns.layoutVersion',2]]),registered=new Map(),timers=new Set(),errors=[];
+ const prefs=new Map([['extensions.zotero.readingRouteColumns.layoutVersion',2]]),registered=new Map(),timers=new Set(),errors=[],readerListeners=new Map();
  let next=0;
  const win={closed:false,ZoteroPane:{getSelectedCollection:()=>null,itemsView:{refreshAndMaintainSelection:async()=>{}}},
  setInterval(){const id=++next;timers.add(id);return id;},clearInterval(id){timers.delete(id);}};
  const Zotero={initializationPromise:Promise.resolve(),Prefs:{get:k=>prefs.get(k),set:(k,v)=>prefs.set(k,v)},
  ItemTreeManager:{registerColumn(o){if(registered.has(o.dataKey))throw Error('duplicate');registered.set(o.dataKey,o);return o.dataKey;},unregisterColumn(k){registered.delete(k);}},
+ Reader:{_readers:[],registerEventListener:(type,fn)=>readerListeners.set(type,fn),unregisterEventListener:type=>readerListeners.delete(type)},
  getMainWindows:()=>[win],getMainWindow:()=>win,logError:e=>errors.push(e),debug(){},Server:{Endpoints:{}}};
- return {Zotero,win,prefs,registered,timers,errors};
+ return {Zotero,win,prefs,registered,timers,errors,readerListeners};
 }

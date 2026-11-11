@@ -170,6 +170,44 @@ var ReadingColumns = (() => {
   function selected(win) {
     try { return win.ZoteroPane.getSelectedCollection()?.key || ''; } catch {return '';}
   }
+  function routes(item) {
+    if(!canMarkRead(item))return [];
+    const tags=item.getTags();
+    return Object.entries(branches).map(([collectionKey,branch])=>({collectionKey,branch,...display(tags,collectionKey)})).filter(row=>row.order||row.position);
+  }
+  function routeCollection(item,key) {
+    const collection=zotero.Collections?.getByLibraryAndKey(item.libraryID,key);
+    if(!collection||collection.deleted||collection.libraryID!==item.libraryID||!item.getCollections?.().includes(collection.id))return null;
+    return collection;
+  }
+  async function jumpRoute(item,key,win) {
+    const state=windows.get(win);
+    if(item.deleted)throw Error('原文献已不可用');
+    if(!routes(item).some(row=>row.collectionKey===key))throw Error('该文献没有此阅读路线');
+    const collection=routeCollection(item,key);
+    if(!collection)throw Error('目标分类不可用，或文献已不在该分类');
+    const pane=win.ZoteroPane;
+    if(!pane?.collectionsView||!pane.itemsView)throw Error('文献列表尚未就绪');
+    if(await pane.collectionsView.selectCollection(collection.id)===false)throw Error('无法打开目标分类');
+    const view=pane.itemsView;await view.waitForLoad?.();
+    if(win.closed||state?.disposed||view!==pane.itemsView||selected(win)!==key)throw Error('当前分类已变化，请重新跳转');
+    const count=await view.selectItem(item.id);
+    if(count===false||count===0)throw Error('文献可能被当前筛选隐藏，请清除筛选后重试');
+    win.Zotero_Tabs?.select('zotero-pane');
+  }
+  function showRoutes(item,win,anchor) {
+    const doc=win.document,state=windows.get(win);if(!state||!doc?.createXULElement)return;
+    state.routePopup?.hidePopup();state.routePopup?.remove();
+    const menu=doc.createXULElement('menupopup');state.routePopup=menu;
+    for(const row of routes(item)) {
+      const collection=routeCollection(item,row.collectionKey),current=selected(win)===row.collectionKey,node=doc.createXULElement('menuitem');
+      node.setAttribute('label',(current?'当前 · ':'')+(collection?.name||row.branch)+' · '+(row.order||'未编号')+' · '+row.position);
+      if(current||!collection)node.setAttribute('disabled','true');
+      node.addEventListener('command',async()=>{try{await jumpRoute(item,row.collectionKey,win);}catch(error){zotero.logError(error);win.alert?.('路线跳转失败。\n'+String(error.message||error));}});menu.appendChild(node);
+    }
+    menu.addEventListener('popuphidden',()=>{menu.remove();if(state.routePopup===menu)state.routePopup=null;});
+    (doc.getElementById('mainPopupSet')||doc.documentElement).appendChild(menu);menu.openPopup(anchor,'after_start',0,0,false,false);
+  }
   function updateEditButton(win,state) {
     if(!state.button)return;
     state.button.textContent=state.editing?'完成编辑':'编辑';
@@ -233,6 +271,11 @@ var ReadingColumns = (() => {
       const cleanup=()=>{state.pending.delete(task);saving=null;};void task.then(cleanup,cleanup);return task;
     };
     const editorState={save};
+    if(!isOrder&&routes(item).length>1){
+      text.setAttribute('role','button');text.setAttribute('aria-haspopup','menu');text.tabIndex=0;text.style.cursor='pointer';text.title+=' · 点击查看其他路线';
+      text.addEventListener('click',event=>{event.stopPropagation();showRoutes(item,win,text);});
+      text.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();showRoutes(item,win,text);}});
+    }
     input.addEventListener('focus',()=>{if(state?.editing&&!state.disposed)state.activeEditor=editorState;});
     // VirtualizedTable focuses the row on mouseup as well as mousedown.
     for(const type of ['mousedown','mouseup','click','dblclick'])input.addEventListener(type,event=>event.stopPropagation());
@@ -317,6 +360,7 @@ var ReadingColumns = (() => {
     const state=windows.get(win);
     if(state) {
       state.disposed=true;state.editing=false;state.activeEditor=null;
+      state.routePopup?.hidePopup();state.routePopup?.remove();
       try{win.clearInterval(state.timer);state.button?.removeEventListener('click',state.toggle);state.button?.remove();}catch{}
       windows.delete(win);
     }
@@ -326,5 +370,5 @@ var ReadingColumns = (() => {
     for(const key of keys) await zotero.ItemTreeManager.unregisterColumn(key);
     keys=[];
   }
-  return {display,isRead,setRead,setOrder,setPosition,start,stop,setupWindow,releaseWindow};
+  return {display,isRead,setRead,setOrder,setPosition,routes,jumpRoute,start,stop,setupWindow,releaseWindow};
 })();

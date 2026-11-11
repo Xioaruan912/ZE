@@ -1,14 +1,14 @@
 {
   "manifest_version": 2,
   "name": "ZE Reader",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "icons": {
     "32": "assets/icon.png",
     "64": "assets/icon.png",
     "128": "assets/icon.png"
   },
   "homepage_url": "https://github.com/Xioaruan912/ZE/tree/plugin/plugins/ze-reader",
-  "description": "可编辑阅读路线、PDF 悬浮预览与内部标签精简。",
+  "description": "阅读路线跳转、公式定义临时固定与 PDF 悬浮预览。",
   "applications": {
     "zotero": {
       "id": "reading-route-columns@local.example",

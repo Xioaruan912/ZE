@@ -19,7 +19,7 @@ class UnifiedPackageTests(unittest.TestCase):
     def test_unified_manifest_upgrades_route_plugin(self):
         manifest = json.loads((PLUGIN / 'manifest.json').read_text(encoding='utf-8'))
         self.assertEqual(manifest['name'], 'ZE Reader')
-        self.assertEqual(manifest['version'], '0.4.4')
+        self.assertEqual(manifest['version'], '0.5.0')
         settings = manifest['applications']['zotero']
         self.assertEqual(settings['id'], 'reading-route-columns@local.example')
         self.assertEqual(settings['strict_max_version'], '10.0.*')
@@ -43,7 +43,7 @@ class UnifiedPackageTests(unittest.TestCase):
     def test_delivered_package_has_current_sources_and_only_native_reading_resources(self):
         builder = self.builder()
         with zipfile.ZipFile(PLUGIN / 'ze-reader.xpi') as archive:
-            expected = {'manifest.json', 'bootstrap.js', 'runtime.js', 'reading-columns.js', 'hover-preview.js', 'tag-visibility.js', 'assets/icon.png'}
+            expected = {'manifest.json', 'bootstrap.js', 'runtime.js', 'reading-columns.js', 'hover-preview.js', 'tag-visibility.js', 'pins.js', 'assets/icon.png'}
             self.assertEqual(set(archive.namelist()), expected)
             for name, source in builder.RUNTIME_FILES.items():
                 content = archive.read(name)
@@ -68,7 +68,7 @@ class UnifiedPackageTests(unittest.TestCase):
             entry = entries[0]
             self.assertEqual(entry['version'], manifest['version'])
             self.assertEqual(entry['update_hash'], 'sha256:' + hashlib.sha256(output.read_bytes()).hexdigest())
-            self.assertEqual(entry['update_link'], 'https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v0.4.4/ze-reader.xpi')
+            self.assertEqual(entry['update_link'], 'https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v0.5.0/ze-reader.xpi')
             self.assertEqual(entry['applications']['zotero'], {'strict_min_version': '10.0', 'strict_max_version': '10.0.*'})
             with zipfile.ZipFile(output) as archive:
                 self.assertEqual(archive.read('assets/icon.png'), (PLUGIN / 'assets/icon.png').read_bytes())
