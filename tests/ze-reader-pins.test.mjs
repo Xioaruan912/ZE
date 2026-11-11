@@ -69,7 +69,7 @@ function managerEnv(renderer){
  const pageView={id:3,viewport:viewport(),pdfPage:{view:[0,0,600,800]},div:new Node()};pageView.div.getBoundingClientRect=()=>({left:0,top:0,width:600,height:800});
  const iframe=frame.doc.createElementNS('','iframe');iframe.ownerDocument=frame.doc;iframe.getBoundingClientRect=()=>({left:0,top:0,width:600,height:800});frame.root.appendChild(iframe);pdf.win.innerWidth=600;pdf.win.innerHeight=800;
  pdf.win.PDFViewerApplication={pdfDocument:{},pdfViewer:{pagesCount:3,getPageView:index=>index===2?pageView:null}};
- const reader={itemID:42,_type:'pdf',_window:host.win,_iframeWindow:frame.win,_internalReader:{_primaryView:{_iframeWindow:pdf.win,_iframe:iframe}},_isUninitialized:false};
+ const reader={itemID:42,_type:'pdf',_window:host.win,_iframeWindow:frame.win,_internalReader:{_primaryView:{_iframeWindow:pdf.win,_iframe:iframe}},_isUninitialized:false,_isTransient(){return false;}};
  const pins=api(),manager=pins.create({Zotero,id:'test',renderRegion:renderer||(async()=> 'data:image/png;base64,image')});
  const fire=(type,extra={})=>{const appended=[];listeners.get(type)?.({reader,doc:frame.doc,params:{},append:node=>appended.push(node),...extra});return appended;};
  return {host,frame,pdf,Zotero,reader,manager,fire,listeners,opened,item,errors};
@@ -80,6 +80,25 @@ test('official reader hooks open region selection, Escape cancels it, and all re
  assert.ok(env.frame.root.querySelector('[data-ze-pin-overlay]'));await env.pdf.win.fire('keydown',{key:'Escape'});
  assert.equal(env.frame.root.querySelector('[data-ze-pin-overlay]'),null);
  env.manager.dispose();assert.equal(env.listeners.size,0);assert.equal(env.host.root.querySelector('panel'),null);
+});
+
+test('native transient method is invoked with its receiver; previews have neither pin entry nor PDF views',()=>{
+ const pins=api(),env=managerEnv();let calls=0;
+ env.reader._isTransient=function(){assert.equal(this,env.reader);calls++;return true;};env.manager.start();
+ assert.equal(env.fire('renderToolbar').length,0);
+ assert.equal(env.fire('renderTextSelectionPopup',{params:{annotation:{position:{pageIndex:0,rects:[[0,0,10,10]]}}}}).length,0);
+ assert.equal(pins.views(env.reader).length,0);assert.equal(calls,3);
+ env.reader._isTransient=function(){assert.equal(this,env.reader);return false;};
+ assert.equal(env.fire('renderToolbar').length,1);assert.equal(pins.views(env.reader).length,1);env.manager.dispose();
+});
+
+test('already-open native readers receive a visible pin entry on plugin startup',()=>{
+ const env=managerEnv(),target=env.frame.doc.createElementNS('','div');target.className='custom-sections';env.frame.root.appendChild(target);
+ const query=env.frame.doc.querySelector.bind(env.frame.doc);
+ env.frame.doc.querySelector=selector=>selector==='.toolbar .end .custom-sections'?target:query(selector);
+ env.Zotero.Reader._readers=[env.reader];env.manager.start();
+ assert.equal(target.querySelectorAll('[data-ze-pin-toolbar]').length,1);
+ assert.equal(target.querySelector('[data-ze-pin-toolbar]').textContent,'固定');env.manager.dispose();
 });
 test('region pointer events pin a PDF image without creating annotations; source remains bound to its attachment',async()=>{
  const regions=[],env=managerEnv(async args=>{regions.push(args.position);return 'data:image/png;base64,image';});env.manager.start();
@@ -103,7 +122,7 @@ test('three-pin limit includes pending renders, and disposed windows cannot rece
  assert.equal(env.host.root.querySelector('panel'),null);env.manager.dispose();
 });
 test('clear and close remove images, missing sources do not open another attachment and preview readers are excluded',async()=>{
- const env=managerEnv();env.manager.start();env.reader._isTransient=true;assert.equal(env.fire('renderToolbar').length,0);env.reader._isTransient=false;
+ const env=managerEnv();env.manager.start();env.reader._isTransient=()=>true;assert.equal(env.fire('renderToolbar').length,0);env.reader._isTransient=()=>false;
  const position={pageIndex:2,rects:[[0,0,20,20]]};await env.fire('renderTextSelectionPopup',{params:{annotation:{position}}})[0].fire('click');await settle();
  env.item.key='REPLACED';await env.host.root.querySelectorAll('button').find(x=>x.textContent==='返回原文').fire('click');assert.equal(env.opened.length,0);assert.match(env.host.root.textContent,/不可用/);
  await env.host.root.querySelectorAll('button').find(x=>x.textContent==='关闭').fire('click');assert.equal(env.host.root.querySelector('img'),null);

@@ -1,4 +1,4 @@
-# ZE Reader 0.5.0
+# ZE Reader 0.5.1
 
 <img src="assets/icon.png" alt="ZE Reader：书页与阅读分支" width="96" />
 
@@ -44,7 +44,7 @@
 
 ## 安装
 
-1. [下载 ze-reader.xpi](https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v0.5.0/ze-reader.xpi)，在 Zotero → 工具 → 插件 → 齿轮 → 从文件安装插件中选中它。
+1. [下载 ze-reader.xpi](https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v0.5.1/ze-reader.xpi)，在 Zotero → 工具 → 插件 → 齿轮 → 从文件安装插件中选中它。
 2. 完全退出并重新启动 Zotero。
 3. 在文献列表表头右键，勾选“已读”“阅读顺序”“分支定位”。
 4. 需要修改路线信息时，使用列表上方搜索框左侧的“编辑／完成编辑”按钮。
@@ -79,6 +79,6 @@ python -m unittest discover -s tests
 
 1. 修改 `manifest.json` 版本，更新发布说明与测试中的版本断言。
 2. 运行构建和测试，将源码、`ze-reader.xpi`、`updates.json` 一起提交到 `plugin` 分支。
-3. 推送同一提交的 `ze-reader-v版本号` 标签，例如 `ze-reader-v0.5.0`。
+3. 推送同一提交的 `ze-reader-v版本号` 标签，例如 `ze-reader-v0.5.1`。
 
 `.github/workflows/release-ze-reader.yml` 会检查标签、重新确定性构建并比对提交中的安装包/更新清单，运行原生插件测试，再发布 GitHub Release 的 `ze-reader.xpi` 与 `updates.json` 附件。工作流使用仓库内置 `GITHUB_TOKEN`，不需要把个人令牌放进插件或源码。旧提交继续保留在 Git 历史中，当前更新清单只提供最新版本。

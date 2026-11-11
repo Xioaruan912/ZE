@@ -1,4 +1,5 @@
 var ZEPins = {
+ isTransient(reader){return typeof reader?._isTransient==='function'?reader._isTransient():reader?._isTransient===true;},
  rect(value,bounds){
   if(!value||value.length!==4||!Array.from(value).every(Number.isFinite))throw Error('无法识别选区坐标');
   let [x1,y1,x2,y2]=value;[x1,x2]=[Math.min(x1,x2),Math.max(x1,x2)];[y1,y2]=[Math.min(y1,y2),Math.max(y1,y2)];
@@ -38,7 +39,7 @@ var ZEPins = {
   }finally{request.cancel=null;canvas.width=0;canvas.height=0;}
  },
  views(reader){
-  const internal=reader?._internalReader;if(!internal||reader._type!=='pdf'||reader._isTransient||reader._isUninitialized)return [];
+  const internal=reader?._internalReader;if(!internal||reader._type!=='pdf'||ZEPins.isTransient(reader)||reader._isUninitialized)return [];
   return [internal._primarySDTView?null:internal._primaryView,internal._secondarySDTView?null:internal._secondaryView].filter(Boolean).map(view=>{
    const raw=view._iframeWindow||view.iframeWindow,win=raw?.wrappedJSObject||raw;
    return {view,win,doc:win?.document,frame:view._iframe||raw?.frameElement,app:win?.PDFViewerApplication};
@@ -167,12 +168,12 @@ var ZEPins = {
    doc.defaultView.addEventListener('unload',unload);documents.set(doc,{reader,unload});
   }
   function toolbar({reader,doc,append}){
-   if(disposed||reader._type!=='pdf'||reader._isTransient||reader._isUninitialized||doc.querySelector?.('[data-ze-pin-toolbar]'))return;
+   if(disposed||reader._type!=='pdf'||ZEPins.isTransient(reader)||reader._isUninitialized||doc.querySelector?.('[data-ze-pin-toolbar]'))return;
    remember(reader,doc);const node=button(doc,'固定',()=>{const state=boards.get(owner(reader));if(capture?.reader===reader)cancelCapture();else if(state?.items.length){state.currentReader=reader;state.show();}else beginCapture(reader);});
    node.setAttribute('data-ze-pin-control','true');node.setAttribute('data-ze-pin-toolbar','true');node.title='临时固定公式或定义';node.className='toolbar-button';node.style.minWidth='38px';append(node);
   }
   function selection({reader,doc,params,append}){
-   if(disposed||reader._type!=='pdf'||reader._isTransient||reader._isUninitialized)return;
+   if(disposed||reader._type!=='pdf'||ZEPins.isTransient(reader)||reader._isUninitialized)return;
    let position;try{position=ZEPins.selectionPosition(params.annotation);}catch{return;}
    remember(reader,doc);const node=button(doc,'临时固定',()=>{void pin(reader,position);});node.setAttribute('data-ze-pin-control','true');append(node);
   }
