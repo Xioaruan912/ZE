@@ -155,3 +155,11 @@ test('the first-column read checkbox is kept inside the native cell-text contain
  const checkbox=content.children[0];assert.equal(checkbox.checked,true);checkbox.checked=false;await checkbox.handlers.change({stopPropagation(){}});
  assert.equal(api.isRead(paper),false);await api.stop();
 });
+
+test('releasing the read checkbox mouse button does not bubble into native row selection and focus',async()=>{
+ const api=load(),paper=item(),env=environment(paper);await api.start(env.zotero);
+ const box=env.definitions.find(c=>c.dataKey==='read').renderCell(0,'0',{},false,env.document).children[0];
+ let stopped=false;await box.handlers.mouseup?.({stopPropagation(){stopped=true;}});
+ assert.equal(stopped,true);box.checked=true;await box.handlers.change({stopPropagation(){}});
+ assert.equal(api.isRead(paper),true);await api.stop();
+});

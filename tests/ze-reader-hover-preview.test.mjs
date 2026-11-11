@@ -127,3 +127,71 @@ for(const rejects of [false,true])test('closing during native initialization def
  assert.equal(calls,0,'native uninit must wait until initialization can no longer register observers');release();await rendering;
  assert.equal(calls,1);assert.equal(observers.size,0);assert.equal(env.root.querySelector('panel'),null);assert.equal(timer.size(),0);
 });
+
+async function wheelPreview(attached=false){
+ const env=windowDOM(),timer=clock();Object.assign(env.win,timer);
+ let page=0;const moves=[],stats={pageIndex:0};
+ const reader={_internalReader:{_state:{primaryViewStats:stats}},async _open(){page=0;stats.pageIndex=0;return true;},
+  canGoto:direction=>direction==='next'?page<2:page>0,
+  goto(direction){moves.push(direction);page+=direction==='next'?1:-1;stats.pageIndex=page;},uninit(){}};
+ const item={id:42,isAttachment:()=>true,attachmentContentType:'application/pdf',fileExists:async()=>true};
+ const Zotero={Reader:{openPreview:async()=>reader}},api=load(['hover-preview.js']).ZEHoverPreview;
+ let owner;
+ if(attached){
+  env.win.ZoteroPane={itemsView:{id:'item-tree-main',getRow:()=>({ref:item})}};
+  owner=api.attach({Zotero,win:env.win});
+  await env.doc.fire('mousemove',{target:{closest:selector=>selector.startsWith('[id*')?{id:'item-tree-main-row-0'}:null}});
+  timer.run(350);await settle();
+ }else owner=api.createView({Zotero,win:env.win});
+ const rendering=attached?null:owner.pdf(item,{});
+ for(let i=0;i<6&&!env.root.querySelector('browser');i++)await settle();
+ const browser=env.root.querySelector('browser');assert.ok(browser);
+ browser.contentDocument={documentURI:'resource://zotero/reader/reader.html'};
+ await browser.fire('DOMContentLoaded',{target:browser.contentDocument});await rendering;await settle();
+ const panel=env.root.querySelector('panel');
+ const wheel=async values=>{
+  let prevented=false,stopped=false;
+  const event={target:browser,deltaX:0,deltaY:100,deltaMode:0,preventDefault(){prevented=true;},stopPropagation(){stopped=true;},...values};
+  // Native document capture runs before the popup wheel handler.
+  if(attached)await env.doc.fire('wheel',event);
+  if(!stopped)await panel.fire('wheel',event);
+  return {prevented,stopped};
+ };
+ return {...env,timer,owner,panel,wheel,moves,page:()=>page};
+}
+
+test('wheel inside the preview turns pages without closing it; scrolling the library closes it',async()=>{
+ const env=await wheelPreview(true);
+ const result=await env.wheel({deltaY:100});
+ assert.equal(env.panel.state,'open');assert.equal(env.page(),1);assert.equal(result.prevented,true);assert.equal(result.stopped,true);
+ await env.doc.fire('wheel',{target:env.root});assert.equal(env.panel.state,'closed');
+ assert.equal(env.timer.size(),0);env.owner.dispose();
+});
+
+test('wheel paging accumulates touchpad deltas, throttles bursts, handles all delta units and clamps boundaries',async()=>{
+ const env=await wheelPreview();
+ await env.wheel({deltaY:18});assert.equal(env.page(),0);
+ await env.wheel({deltaY:22});assert.equal(env.page(),1);
+ await env.wheel({deltaY:120});assert.equal(env.page(),1,'one burst must not skip pages');
+ env.timer.run(180);await env.wheel({deltaY:3,deltaMode:1});assert.equal(env.page(),2);
+ env.timer.run(180);await env.wheel({deltaY:1,deltaMode:2});assert.equal(env.page(),2);
+ await env.wheel({deltaY:-1,deltaMode:2});assert.equal(env.page(),1);
+ env.timer.run(180);await env.wheel({deltaY:-3,deltaMode:1});assert.equal(env.page(),0);
+ env.timer.run(180);await env.wheel({deltaY:-120});assert.equal(env.page(),0);
+ assert.deepEqual(env.moves,['next','next','prev','prev']);
+ env.owner.dispose();assert.equal(env.timer.size(),0);
+});
+
+test('horizontal and modified wheel gestures do not flip pages and a fresh PDF has no wheel cooldown',async()=>{
+ const env=await wheelPreview();
+ await env.wheel({deltaX:120,deltaY:10});await env.wheel({ctrlKey:true});await env.wheel({metaKey:true});
+ assert.equal(env.page(),0);
+ await env.wheel({deltaY:30});await env.wheel({deltaY:-20});await env.wheel({deltaY:20});assert.equal(env.page(),0,'direction changes reset partial motion');
+ await env.wheel({deltaY:20});assert.equal(env.page(),1);
+ env.owner.hide();assert.equal(env.timer.size(),0);
+ const rendering=env.owner.pdf({id:43},{}),browser=env.root.querySelector('browser');
+ browser.contentDocument={documentURI:'resource://zotero/reader/reader.html'};
+ await browser.fire('DOMContentLoaded',{target:browser.contentDocument});await rendering;
+ await env.wheel({deltaY:100});assert.equal(env.page(),1,'new previews accept wheel input immediately');
+ env.owner.dispose();assert.equal(env.timer.size(),0);
+});

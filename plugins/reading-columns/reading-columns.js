@@ -141,7 +141,7 @@ var ReadingColumns = (() => {
     checkbox.setAttribute('aria-label','已读');
     const updateTitle=()=>{checkbox.title=checkbox.checked?'已读，点击取消':'标为已读';};
     updateTitle();
-    for(const type of ['mousedown','click','dblclick']) {
+    for(const type of ['mousedown','mouseup','click','dblclick']) {
       checkbox.addEventListener(type,event=>event.stopPropagation());
     }
     checkbox.addEventListener('keydown',event=>{
@@ -175,29 +175,42 @@ var ReadingColumns = (() => {
     if(!canMarkRead(item)||!branches[collectionKey]){span.textContent=item?value(item,win)[name]:data;return span;}
     Object.assign(span.style,{display:'flex',alignItems:'center'});
     const isOrder=name==='order',label=isOrder?'阅读顺序':'分支定位';
+    const editor=doc.createElement('span'),text=doc.createElement('span');
+    editor.className='route-editor';text.className='route-value';
+    Object.assign(editor.style,{display:'flex',alignItems:'center',width:'100%',minWidth:'0',gap:'4px'});
+    Object.assign(text.style,{flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textAlign:isOrder?'center':'left'});
+    const button=doc.createElementNS('http://www.w3.org/1999/xhtml','button');
+    button.type='button';button.textContent='编辑';button.setAttribute('aria-label','编辑'+label);button.title='编辑'+label;
+    Object.assign(button.style,{flex:'0 0 auto',font:'inherit',fontSize:'11px',padding:'0 3px',color:'inherit',background:'transparent',border:'1px solid GrayText',borderRadius:'3px',cursor:'pointer'});
     const input=doc.createElementNS('http://www.w3.org/1999/xhtml','input');
-    let composing=false;
+    let composing=false,editing=false;
     input.type='text';input.maxLength=isOrder?2:120;input.size=isOrder?2:20;input.placeholder=isOrder?'—':'填写定位';if(isOrder)input.setAttribute('inputmode','numeric');input.setAttribute('aria-label',label);
     input.title=isOrder?'输入 01–99；Enter 或离开输入框保存，Esc 取消，留空清除':'输入自己的定位；Enter 或离开输入框保存，Esc 取消；留空时显示路线标签对应的默认定位（如有）';
     Object.assign(input.style,{width:'100%',minWidth:'0',boxSizing:'border-box',font:'inherit',color:'inherit',background:'transparent',border:'1px solid GrayText',borderRadius:'3px',textAlign:isOrder?'center':'left'});
-    const restore=()=>{input.value=display(item.getTags(),collectionKey)[name];};restore();
+    const restore=()=>{input.value=display(item.getTags(),collectionKey)[name];text.textContent=input.value||'—';text.title=input.value;};
+    const finish=()=>{editing=false;composing=false;restore();input.readOnly=true;input.hidden=true;text.hidden=false;button.hidden=false;};finish();
+    const begin=()=>{if(editing||input.disabled)return;restore();editing=true;input.readOnly=false;input.hidden=false;text.hidden=true;button.hidden=true;input.focus?.();input.select?.();};
     const save=async()=>{
-      if(input.disabled)return;
-      if(input.value===display(item.getTags(),collectionKey)[name])return;
+      if(!editing||input.disabled)return;
+      if(input.value===display(item.getTags(),collectionKey)[name]){finish();return;}
       const draft=input.value;input.disabled=true;
       try {await (isOrder?setOrder:setPosition)(item,collectionKey,draft);await refreshWindows();}
       catch(error){zotero.logError(error);win.alert(label+'未保存。\n'+String(error.message||error));}
-      finally {restore();input.disabled=false;}
+      finally {input.disabled=false;finish();}
     };
-    for(const type of ['mousedown','click','dblclick'])input.addEventListener(type,event=>event.stopPropagation());
+    // VirtualizedTable focuses the row on mouseup as well as mousedown.
+    for(const type of ['mousedown','mouseup','click','dblclick'])input.addEventListener(type,event=>event.stopPropagation());
+    for(const type of ['mousedown','mouseup','dblclick','keydown'])button.addEventListener(type,event=>event.stopPropagation());
+    button.addEventListener('click',event=>{event.stopPropagation();begin();});
     input.addEventListener('compositionstart',()=>{composing=true;});input.addEventListener('compositionend',()=>{composing=false;});
     input.addEventListener('keydown',async event=>{
       event.stopPropagation();
       if(composing||event.isComposing||event.keyCode===229)return;
       if(event.key==='Enter'){event.preventDefault();await save();}
-      else if(event.key==='Escape'){event.preventDefault();restore();}
+      else if(event.key==='Escape'){event.preventDefault();finish();button.focus?.();}
     });
-    input.addEventListener('blur',save);return appendCellControl(span,input,isFirst,doc);
+    editor.appendChild(text);editor.appendChild(button);editor.appendChild(input);
+    input.addEventListener('blur',save);return appendCellControl(span,editor,isFirst,doc);
   }
   function value(item,win) {
     if(!item || item.parentID) return {order:'',position:'',read:''};

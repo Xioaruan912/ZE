@@ -42,13 +42,13 @@ var ZEHoverPreview = {
  },
  createView({Zotero,win,onEnter,onLeave,onClose}){
   const doc=win.document,timers=new Set();let panel=null,title=null,status=null,body=null,prev=null,next=null,open=null;
-  let browser=null,reader=null,session=null,attachment=null,page=1,visible=false,disposed=false,generation=0,cancelLoad=null,refreshTimer=null;
+  let browser=null,reader=null,session=null,attachment=null,page=1,visible=false,disposed=false,generation=0,cancelLoad=null,refreshTimer=null,wheelTimer=null,wheelDelta=0;
   const element=(name,text)=>{const node=doc.createElementNS('http://www.w3.org/1999/xhtml',name);if(text!==undefined)node.textContent=text;return node;};
   const uninit=value=>{try{value?.uninit();}catch{}};
   const finishSession=value=>{if(!value.closed){value.closed=true;uninit(value.reader);}};
   function dropReader(){
    generation++;cancelLoad?.();cancelLoad=null;
-   for(const timer of timers)win.clearTimeout(timer);timers.clear();refreshTimer=null;
+   for(const timer of timers)win.clearTimeout(timer);timers.clear();refreshTimer=null;wheelTimer=null;wheelDelta=0;
    if(session){session.retired=true;if(!session.opening)finishSession(session);session=null;}
    reader=null;browser?.remove();browser=null;
   }
@@ -69,6 +69,7 @@ var ZEHoverPreview = {
    });
    box.append(title,actions,status,body);panel.appendChild(box);
    panel.addEventListener('mouseenter',()=>onEnter?.());panel.addEventListener('mouseleave',()=>onLeave?.());
+   panel.addEventListener('wheel',wheel,{passive:false});
    (doc.getElementById?.('mainPopupSet')||doc.documentElement).appendChild(panel);
   }
   function show(point={}){
@@ -91,7 +92,21 @@ var ZEHoverPreview = {
    },200);refreshTimer=timer;timers.add(timer);
   }
   function go(direction){
-   if(!reader?.canGoto(direction))return;const index=pageIndex();reader.goto(direction);if(index===null)page=Math.max(1,page+(direction==='next'?1:-1));update();scheduleUpdate();
+   if(!reader?.canGoto(direction))return false;const index=pageIndex();reader.goto(direction);if(index===null)page=Math.max(1,page+(direction==='next'?1:-1));update();scheduleUpdate();return true;
+  }
+  function wheel(event){
+   if(disposed||!visible)return;
+   event.preventDefault();event.stopPropagation();
+   if(!reader||wheelTimer!==null||event.ctrlKey||event.metaKey||Math.abs(event.deltaX||0)>Math.abs(event.deltaY||0))return;
+   const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?520:1);
+   if(!Number.isFinite(delta)||delta===0)return;
+   if(Math.sign(delta)!==Math.sign(wheelDelta))wheelDelta=0;
+   wheelDelta+=delta;if(Math.abs(wheelDelta)<40)return;
+   const direction=wheelDelta>0?'next':'prev';wheelDelta=0;
+   if(go(direction)){
+    const timer=win.setTimeout(()=>{timers.delete(timer);if(wheelTimer===timer)wheelTimer=null;},180);
+    wheelTimer=timer;timers.add(timer);
+   }
   }
   const api={
    loading(item,point){if(!show(point))return;dropReader();attachment=null;prev.disabled=true;next.disabled=true;open.disabled=true;title.textContent=item.getDisplayTitle?.()||item.getField?.('title')||'PDF 预览';status.textContent='正在读取本机 PDF…';},
@@ -138,7 +153,7 @@ var ZEHoverPreview = {
   const view=ZEHoverPreview.createView({Zotero,win,onEnter:()=>controller.enterPopup(),onLeave:()=>controller.leave(),onClose:()=>controller.close()});
   controller=ZEHoverPreview.create({resolvePDF:item=>ZEHoverPreview.resolvePDF(Zotero,item),view,setTimeout:win.setTimeout.bind(win),clearTimeout:win.clearTimeout.bind(win)});
   const on=(target,type,handler)=>{target.addEventListener(type,handler,true);listeners.push(()=>target.removeEventListener(type,handler,true));};
-  const editing=target=>!!target?.closest?.('input,textarea,editable-text,[contenteditable="true"]');
+  const editing=target=>!!target?.closest?.('input,textarea,button,editable-text,[contenteditable="true"]');
   on(doc,'mousemove',event=>{
    if(view.contains(event.target)){controller.enterPopup();return;}
    const tree=win.ZoteroPane?.itemsView,node=event.target?.closest?.('[id*="-row-"]'),prefix=(tree?.id||'zotero-items-tree')+'-row-';
@@ -149,7 +164,7 @@ var ZEHoverPreview = {
    controller.hover(item,{screenX:event.screenX,screenY:event.screenY});
   });
   on(doc,'keydown',event=>{if(event.key==='Escape'&&view.visible){event.preventDefault();event.stopPropagation();controller.close();}});
-  on(doc,'mousedown',event=>{if(!view.contains(event.target))controller.close();});on(doc,'wheel',()=>controller.close());
+  on(doc,'mousedown',event=>{if(!view.contains(event.target))controller.close();});on(doc,'wheel',event=>{if(!view.contains(event.target))controller.close();});
   on(win,'blur',event=>{if(event.target===win||(typeof doc.hasFocus==='function'&&!doc.hasFocus()))controller.close();});
   return {dispose(){for(const remove of listeners)remove();controller.dispose();view.dispose();}};
  }

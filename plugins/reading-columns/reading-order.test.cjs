@@ -18,6 +18,11 @@ function ui(item){
  return {definitions,alerts,errors,win,doc,Zotero};
 }
 const event=key=>({key,stopPropagation(){},preventDefault(){}});
+function controls(cell){
+ const nodes=[];function visit(node){nodes.push(node);for(const child of node.children||[])visit(child);}visit(cell);
+ const input=nodes.find(n=>n.type==='text'),button=nodes.find(n=>n.type==='button'),text=nodes.find(n=>n.className==='route-value');
+ return {input,button,text,async begin(){await button.handlers.click(event());}};
+}
 
 test('editing an order preserves its stage, short name, other branches and read status',async()=>{
  const api=load(),item=paper(['阅读顺序-02访问控制-03-奠基-KPABE2006','阅读顺序-90证明工具-06-核心-ZK','阅读状态-已读','原有标签']);
@@ -50,18 +55,18 @@ test('failed order saves restore every original route tag and tag type',async()=
 test('order cells accept Enter and blur saves while Escape cancels an uncommitted edit',async()=>{
  const api=load(),item=paper(['阅读顺序-02访问控制-03-奠基-KPABE2006']),env=ui(item);await api.start(env.Zotero);
  const column=env.definitions.find(c=>c.dataKey==='order');
- const cell=column.renderCell(0,'03',{className:'order-column'},false,env.doc),input=cell.children[0];assert.ok(input,'order cell must contain an editable input');
+ const cell=column.renderCell(0,'03',{className:'order-column'},false,env.doc),editor=controls(cell),{input}=editor;assert.ok(input,'order cell must contain an editable input');await editor.begin();
  assert.equal(input.value,'03');input.value='8';await input.handlers.keydown(event('Enter'));assert.equal(input.value,'08');assert.equal(item.saves,1);
- input.value='9';await input.handlers.keydown(event('Escape'));assert.equal(input.value,'08');assert.equal(item.saves,1);
- input.value='6';await input.handlers.blur(event());assert.equal(api.display(item.getTags(),'BJED65AU').order,'06');assert.equal(env.alerts.length,0);await api.stop();
+ await editor.begin();input.value='9';await input.handlers.keydown(event('Escape'));assert.equal(input.value,'08');assert.equal(item.saves,1);
+ await editor.begin();input.value='6';await input.handlers.blur(event());assert.equal(api.display(item.getTags(),'BJED65AU').order,'06');assert.equal(env.alerts.length,0);await api.stop();
 });
 
 test('an editing cell retains its original branch after a collection switch and restores failed input',async()=>{
  let fail=false;const api=load(),item=paper(['阅读顺序-02访问控制-03-奠基-KPABE2006']),env=ui(item);
  item.saveTx=async()=>{if(fail)throw Error('read only');item.saves++;};await api.start(env.Zotero);
- const input=env.definitions.find(c=>c.dataKey==='order').renderCell(0,'03',{},false,env.doc).children[0];assert.ok(input);
+ const editor=controls(env.definitions.find(c=>c.dataKey==='order').renderCell(0,'03',{},false,env.doc)),{input}=editor;assert.ok(input);await editor.begin();
  env.win.collection='K57JIGUF';input.value='4';await input.handlers.blur(event());assert.equal(api.display(item.getTags(),'BJED65AU').order,'04');assert.equal(api.display(item.getTags(),'K57JIGUF').order,'');
- fail=true;input.value='5';await input.handlers.keydown(event('Enter'));assert.equal(input.value,'04');assert.equal(input.disabled,false);assert.match(env.alerts[0],/未保存/);await api.stop();
+ fail=true;await editor.begin();input.value='5';await input.handlers.keydown(event('Enter'));assert.equal(input.value,'04');assert.equal(input.disabled,false);assert.match(env.alerts[0],/未保存/);await api.stop();
 });
 
 test('read and route writes on one paper serialize rather than overwrite each other',async()=>{
@@ -95,15 +100,15 @@ test('failed position writes restore the original override and unrelated tags',a
 
 test('position cells accept direct text and clearing restores the automatic position',async()=>{
  const api=load(),item=paper(['阅读顺序-02访问控制-03-奠基-KPABE2006']),env=ui(item);await api.start(env.Zotero);
- const input=env.definitions.find(c=>c.dataKey==='position').renderCell(0,'',{},false,env.doc).children[0];assert.ok(input,'position must be editable');
+ const editor=controls(env.definitions.find(c=>c.dataKey==='position').renderCell(0,'',{},false,env.doc)),{input}=editor;assert.ok(input,'position must be editable');await editor.begin();
  input.value='进阶 · 我自己的定位';await input.handlers.keydown(event('Enter'));assert.equal(input.value,'进阶 · 我自己的定位');
- input.value='取消';await input.handlers.keydown(event('Escape'));assert.equal(input.value,'进阶 · 我自己的定位');
- input.value='';await input.handlers.blur(event());assert.equal(input.value,'奠基 · ABE构造主线');await api.stop();
+ await editor.begin();input.value='取消';await input.handlers.keydown(event('Escape'));assert.equal(input.value,'进阶 · 我自己的定位');
+ await editor.begin();input.value='';await input.handlers.blur(event());assert.equal(input.value,'奠基 · ABE构造主线');await api.stop();
 });
 
 test('Chinese composition confirmation and cancellation do not submit or restore the position field',async()=>{
  const api=load(),item=paper(['阅读顺序-02访问控制-03-奠基-KPABE2006']),env=ui(item);await api.start(env.Zotero);
- const input=env.definitions.find(c=>c.dataKey==='position').renderCell(0,'',{},false,env.doc).children[0];let prevented=0;
+ const editor=controls(env.definitions.find(c=>c.dataKey==='position').renderCell(0,'',{},false,env.doc)),{input}=editor;await editor.begin();let prevented=0;
  input.value='核心 · 正在输入';await input.handlers.keydown({...event('Enter'),isComposing:true,preventDefault(){prevented++;}});
  assert.equal(item.saves,0);assert.equal(prevented,0);assert.notEqual(input.disabled,true);
  await input.handlers.keydown({...event('Escape'),isComposing:true});assert.equal(input.value,'核心 · 正在输入');
@@ -118,7 +123,7 @@ test('editable first-column cells provide the native cell-text wrapper and retai
   const cell=env.definitions.find(c=>c.dataKey===name).renderCell(0,'',{},true,env.doc);
   const content=cell.children.find(node=>(node.className||'').split(' ').includes('cell-text'));
   assert.ok(content,'native first-column processing reparses innerHTML unless cell-text already exists');
-  const input=content.children[0];assert.ok(input.handlers.keydown);assert.ok(input.value);
+  const editor=controls(content),{input}=editor;assert.ok(input.handlers.keydown);assert.ok(input.value);await editor.begin();
   input.value=name==='order'?'4':'核心 · 手动定位';await input.handlers.keydown(event('Enter'));
  }
  assert.equal(api.display(item.getTags(),'BJED65AU').order,'04');assert.equal(api.display(item.getTags(),'BJED65AU').position,'核心 · 手动定位');await api.stop();
@@ -126,6 +131,52 @@ test('editable first-column cells provide the native cell-text wrapper and retai
 
 test('an unnumbered paper prompts for a manual position rather than claiming automatic positioning',async()=>{
  const api=load(),env=ui(paper());await api.start(env.Zotero);
- const input=env.definitions.find(c=>c.dataKey==='position').renderCell(0,'',{},false,env.doc).children[0];
+ const {input}=controls(env.definitions.find(c=>c.dataKey==='position').renderCell(0,'',{},false,env.doc));
  assert.equal(input.value,'');assert.equal(input.placeholder,'填写定位');await api.stop();
+});
+
+test('a complete mouse click keeps text fields focused so typing and Enter reach the editor',async()=>{
+ const api=load(),item=paper(),env=ui(item);await api.start(env.Zotero);
+ for(const first of [false,true])for(const name of ['order','position']){
+  const cell=env.definitions.find(c=>c.dataKey===name).renderCell(0,'',{},first,env.doc);
+  const editor=controls(cell),{input,button}=editor;let active=null,tableFocuses=0;
+  // Zotero 10.0.8 VirtualizedTable focuses the table on both row mousedown and mouseup.
+  const mouse=async (target,type)=>{
+   let stopped=false,prevented=false;
+   await target.handlers[type]?.({stopPropagation(){stopped=true;},preventDefault(){prevented=true;}});
+   if(!stopped&&type!=='click'){active='table';tableFocuses++;}
+   if(type==='mousedown'&&!prevented)active=target; // Browser default focus action
+  };
+  input.focus=()=>{active=input;};input.select=()=>{};
+  for(const target of [button,input])for(const type of ['mousedown','mouseup','click'])await mouse(target,type);
+  assert.equal(active,input,'row mouseup must not steal input focus');assert.equal(tableFocuses,0);
+  input.value='';
+  const draft=name==='order'?'13':'我的定位';
+  for(const key of draft){
+   let prevented=false;await active.handlers.keydown({...event(key),preventDefault(){prevented=true;}});
+   if(!prevented)active.value+=key;
+  }
+  await active.handlers.keydown(event('Enter'));
+  assert.equal(api.display(item.getTags(),'BJED65AU')[name],draft);
+ }
+ await api.stop();
+});
+
+test('route cells display read-only text until Edit, then save or cancel back to text',async()=>{
+ const api=load(),item=paper(['阅读顺序-02访问控制-03-奠基-KPABE2006']),env=ui(item);await api.start(env.Zotero);
+ for(const name of ['order','position']){
+  const editor=controls(env.definitions.find(c=>c.dataKey===name).renderCell(0,'',{},false,env.doc)),{input,button,text}=editor;
+  assert.ok(button,'each editable cell needs an explicit edit button');assert.equal(button.textContent,'编辑');
+  assert.equal(input.hidden,true);assert.equal(input.readOnly,true);assert.equal(text.hidden,false);assert.equal(button.hidden,false);
+  const original=api.display(item.getTags(),'BJED65AU')[name];assert.equal(text.textContent,original);
+  const saves=item.saves;await input.handlers.blur(event());assert.equal(item.saves,saves,'read-only display cannot save');
+  let focuses=0;input.focus=()=>focuses++;await editor.begin();
+  assert.equal(focuses,1);assert.equal(input.hidden,false);assert.equal(input.readOnly,false);assert.equal(text.hidden,true);assert.equal(button.hidden,true);
+  input.value='取消';await input.handlers.keydown(event('Escape'));await input.handlers.blur(event());
+  assert.equal(input.hidden,true);assert.equal(input.readOnly,true);assert.equal(text.textContent,original);assert.equal(button.hidden,false);
+  await editor.begin();input.value=name==='order'?'8':'自定定位';await input.handlers.keydown(event('Enter'));
+  assert.equal(input.hidden,true);assert.equal(text.hidden,false);assert.equal(text.textContent,name==='order'?'08':'自定定位');
+  await editor.begin();await input.handlers.blur(event());assert.equal(input.hidden,true,'unchanged blur also exits editing');
+ }
+ assert.equal(item.saves,2);await api.stop();
 });
