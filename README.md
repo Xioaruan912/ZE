@@ -1,8 +1,8 @@
 # ZE
 
-## ZE Reader 统一插件
+## ZE Reader 桌面插件
 
-[ZE Reader 安装与使用](plugins/ze-reader/README.md) 将阅读路线列和 Translate Bridge 合并为一个 XPI，并新增标签页分组、笔记与标注汇总、文献矩阵。面向 Zotero 10.0.x；运行 `npm.cmd run build:plugin` 生成 `plugins/ze-reader/ze-reader.xpi`。旧独立插件仍保留兼容入口，建议新安装使用统一版。
+[ZE Reader 安装与使用](plugins/ze-reader/README.md) 0.3.1 精简版仅保留已读、阅读顺序和分支定位三列，已移除工作台与翻译桥接。面向 Zotero 10.0.x；运行 `npm.cmd run build:plugin` 生成 `plugins/ze-reader/ze-reader.xpi`。下方介绍的是另行运行的 ZE 网页阅读器。
 
 在浏览器里阅读自己的 Zotero 论文，支持电脑、iPad 和手机。
 

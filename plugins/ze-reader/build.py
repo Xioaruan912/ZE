@@ -1,17 +1,10 @@
-"""Build the shareable ZE Reader XPI; never read private machine configuration."""
+"""Build the lightweight ZE Reader XPI; never read private machine configuration."""
 import argparse
 import zipfile
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 RUNTIME_FILES = {
-    **{name: BASE / name for name in ('workbench.xhtml', 'workbench.js', 'workbench.css', 'settings.xhtml', 'settings.js', 'locale/zh-CN/ze-reader.ftl')},
-    'matrix.js': BASE / 'matrix.js',
-    'summary.js': BASE / 'summary.js',
-    'tab-groups.js': BASE / 'tab-groups.js',
-    'bridge.js': BASE / 'bridge.js',
-    'preferences.js': BASE / 'preferences.js',
-    'zotero-adapter.js': BASE / 'zotero-adapter.js',
     'manifest.json': BASE / 'manifest.json',
     'bootstrap.js': BASE / 'bootstrap.js',
     'runtime.js': BASE / 'runtime.js',

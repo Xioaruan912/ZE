@@ -2,9 +2,9 @@ var zeScope;
 function install() {}
 async function startup({id,rootURI}) {
  await Zotero.initializationPromise;
- zeScope={Zotero,Services,ChromeUtils,Cc,Ci};
- for(const file of ['reading-columns.js','preferences.js','zotero-adapter.js','bridge.js','tab-groups.js','summary.js','matrix.js','workbench.js','settings.js','runtime.js']) Services.scriptloader.loadSubScript(rootURI+file,zeScope);
- zeScope.runtime=zeScope.ZERuntime.create({Zotero,Services,id,rootURI});
+ zeScope={};
+ for(const file of ['reading-columns.js','runtime.js']) Services.scriptloader.loadSubScript(rootURI+file,zeScope);
+ zeScope.runtime=zeScope.ZERuntime.create({Zotero,id});
  await zeScope.runtime.start();
 }
 function onMainWindowLoad({window}) {if(zeScope)void zeScope.runtime.setupWindow(window);}
