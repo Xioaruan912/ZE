@@ -83,3 +83,33 @@ test('native preview starts at page one, pages locally and opens the displayed p
  await env.root.querySelectorAll('button').find(node=>node.textContent==='打开 PDF').fire('click');
  assert.equal(opened[0][0],42);assert.equal(opened[0][1].pageIndex,1);assert.equal(closed,1);assert.equal(timer.size(),0);view.dispose();
 });
+
+test('a descendant blur keeps preview controls usable while actual window blur closes it',async()=>{
+ const env=windowDOM(),timer=clock();Object.assign(env.win,timer);
+ const item={id:1,isAttachment:()=>true,attachmentContentType:'application/pdf',fileExists:async()=>true};
+ env.win.ZoteroPane={itemsView:{id:'item-tree-main',getRow:()=>({ref:item})}};
+ const owner=load(['hover-preview.js']).ZEHoverPreview.attach({Zotero:{Reader:{openPreview(){throw Error('not loaded');}}},win:env.win});
+ const target={closest:selector=>selector.startsWith('[id*')?{id:'item-tree-main-row-0'}:null};
+ await env.doc.fire('mousemove',{target,altKey:true});timer.run(350);await settle();const panel=env.root.querySelector('panel');
+ await env.win.fire('blur',{target:env.root.querySelector('button')});assert.equal(panel.state,'open');
+ await env.win.fire('blur',{target:env.win});assert.equal(panel.state,'closed');owner.dispose();
+});
+
+test('releasing Alt before the delay expires cancels native activation',async()=>{
+ const env=windowDOM(),timer=clock();Object.assign(env.win,timer);
+ const item={id:1,isRegularItem:()=>true};env.win.ZoteroPane={itemsView:{id:'item-tree-main',getRow:()=>({ref:item})}};
+ const owner=load(['hover-preview.js']).ZEHoverPreview.attach({Zotero:{},win:env.win});
+ const target={closest:selector=>selector.startsWith('[id*')?{id:'item-tree-main-row-0'}:null};
+ await env.doc.fire('mousemove',{target,altKey:false});await env.doc.fire('keydown',{key:'Alt'});await env.doc.fire('keyup',{key:'Alt'});
+ timer.run(350);await settle();assert.equal(env.root.querySelector('panel'),null);assert.equal(timer.size(),0);owner.dispose();
+});
+
+for(const rejects of [false,true])test('closing during native initialization defers first uninit and removes late observers on '+(rejects?'rejection':'success'),async()=>{
+ const env=windowDOM(),timer=clock();Object.assign(env.win,timer);let release,calls=0;const gate=new Promise(resolve=>{release=resolve;}),observers=new Set();
+ const reader={async _open(){await gate;for(let i=0;i<13;i++)observers.add(i);if(rejects)throw Error('late failure');return true;},uninit(){calls++;if(this._isUninitialized)return;this._isUninitialized=true;observers.clear();}};
+ const view=load(['hover-preview.js']).ZEHoverPreview.createView({Zotero:{Reader:{openPreview:async()=>reader}},win:env.win});
+ const rendering=view.pdf({id:1},{}),browser=env.root.querySelector('browser');browser.contentDocument={documentURI:'resource://zotero/reader/reader.html'};
+ await browser.fire('DOMContentLoaded',{target:browser.contentDocument});await settle();view.dispose();
+ assert.equal(calls,0,'native uninit must wait until initialization can no longer register observers');release();await rendering;
+ assert.equal(calls,1);assert.equal(observers.size,0);assert.equal(env.root.querySelector('panel'),null);assert.equal(timer.size(),0);
+});

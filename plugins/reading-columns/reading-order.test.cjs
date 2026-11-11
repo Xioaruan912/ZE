@@ -100,3 +100,14 @@ test('position cells accept direct text and clearing restores the automatic posi
  input.value='取消';await input.handlers.keydown(event('Escape'));assert.equal(input.value,'进阶 · 我自己的定位');
  input.value='';await input.handlers.blur(event());assert.equal(input.value,'奠基 · ABE构造主线');await api.stop();
 });
+
+test('Chinese composition confirmation and cancellation do not submit or restore the position field',async()=>{
+ const api=load(),item=paper(['阅读顺序-02访问控制-03-奠基-KPABE2006']),env=ui(item);await api.start(env.Zotero);
+ const input=env.definitions.find(c=>c.dataKey==='position').renderCell(0,'',{},false,env.doc).children[0];let prevented=0;
+ input.value='核心 · 正在输入';await input.handlers.keydown({...event('Enter'),isComposing:true,preventDefault(){prevented++;}});
+ assert.equal(item.saves,0);assert.equal(prevented,0);assert.notEqual(input.disabled,true);
+ await input.handlers.keydown({...event('Escape'),isComposing:true});assert.equal(input.value,'核心 · 正在输入');
+ await input.handlers.compositionstart(event());await input.handlers.keydown(event('Enter'));assert.equal(item.saves,0);
+ await input.handlers.compositionend(event());await input.handlers.keydown({...event('Enter'),keyCode:229});assert.equal(item.saves,0);
+ await input.handlers.keydown(event('Enter'));assert.equal(item.saves,1);assert.equal(input.value,'核心 · 正在输入');await api.stop();
+});

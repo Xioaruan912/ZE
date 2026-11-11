@@ -168,6 +168,7 @@ var ReadingColumns = (() => {
     if(!canMarkRead(item)||!branches[collectionKey]){span.textContent=item?value(item,win)[name]:data;return span;}
     const isOrder=name==='order',label=isOrder?'阅读顺序':'分支定位';
     const input=doc.createElementNS('http://www.w3.org/1999/xhtml','input');
+    let composing=false;
     input.type='text';input.maxLength=isOrder?2:120;input.size=isOrder?2:20;input.placeholder=isOrder?'—':'自动定位';if(isOrder)input.setAttribute('inputmode','numeric');input.setAttribute('aria-label',label);
     input.title=isOrder?'输入 01–99；Enter 或离开输入框保存，Esc 取消，留空清除':'输入阶段或自己的定位；Enter 或离开输入框保存，Esc 取消，留空恢复自动定位';
     Object.assign(input.style,{width:'100%',minWidth:'0',boxSizing:'border-box',font:'inherit',color:'inherit',background:'transparent',border:'1px solid GrayText',borderRadius:'3px',textAlign:isOrder?'center':'left'});
@@ -181,8 +182,10 @@ var ReadingColumns = (() => {
       finally {restore();input.disabled=false;}
     };
     for(const type of ['mousedown','click','dblclick'])input.addEventListener(type,event=>event.stopPropagation());
+    input.addEventListener('compositionstart',()=>{composing=true;});input.addEventListener('compositionend',()=>{composing=false;});
     input.addEventListener('keydown',async event=>{
       event.stopPropagation();
+      if(composing||event.isComposing||event.keyCode===229)return;
       if(event.key==='Enter'){event.preventDefault();await save();}
       else if(event.key==='Escape'){event.preventDefault();restore();}
     });

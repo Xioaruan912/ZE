@@ -36,19 +36,21 @@ var ZEHoverPreview = {
     if(disposed)return;if(!item){leave();return;}clearHide();
     if(current?.item!==item){close();current={item,point,started:false};}else current.point=point;
     if(altKey)activate();
-   },activate,leave,enterPopup:clearHide,close,
+   },activate,releaseAlt:clearStart,leave,enterPopup:clearHide,close,
    dispose(){if(disposed)return;disposed=true;close();}
   };
  },
  createView({Zotero,win,onEnter,onLeave,onClose}){
   const doc=win.document,timers=new Set();let panel=null,title=null,status=null,body=null,prev=null,next=null,open=null;
-  let browser=null,reader=null,attachment=null,page=1,visible=false,disposed=false,generation=0,cancelLoad=null;
+  let browser=null,reader=null,session=null,attachment=null,page=1,visible=false,disposed=false,generation=0,cancelLoad=null;
   const element=(name,text)=>{const node=doc.createElementNS('http://www.w3.org/1999/xhtml',name);if(text!==undefined)node.textContent=text;return node;};
   const uninit=value=>{try{value?.uninit();}catch{}};
+  const finishSession=value=>{if(!value.closed){value.closed=true;uninit(value.reader);}};
   function dropReader(){
    generation++;cancelLoad?.();cancelLoad=null;
    for(const timer of timers)win.clearTimeout(timer);timers.clear();
-   uninit(reader);reader=null;browser?.remove();browser=null;
+   if(session){session.retired=true;if(!session.opening)finishSession(session);session=null;}
+   reader=null;browser?.remove();browser=null;
   }
   function ensure(){
    if(panel)return;
@@ -104,15 +106,18 @@ var ZEHoverPreview = {
     target.setAttribute('src','resource://zotero/reader/reader.html');body.appendChild(target);
     if(!await ready){if(!disposed&&token===generation)api.message('预览加载超时，可点击“打开 PDF”。',point);return;}
     if(disposed||token!==generation)return;
-    let localReader=null;
+    let localReader=null,localSession=null;
     try{
      localReader=await Zotero.Reader.openPreview(item.id,target);
-     if(disposed||token!==generation){uninit(localReader);return;}reader=localReader;
-     const success=await localReader._open({location:{pageIndex:0}});
      if(disposed||token!==generation){uninit(localReader);return;}
+     localSession={reader:localReader,opening:true,retired:false,closed:false};session=localSession;reader=localReader;
+     const success=await localReader._open({location:{pageIndex:0}});
+     if(disposed||token!==generation)return;
      if(!success){api.message('此 PDF 无法预览，可点击“打开 PDF”。',point);return;}update();
     }catch{
-     uninit(localReader);if(!disposed&&token===generation)api.message('预览失败，可点击“打开 PDF”。',point);
+     if(!localSession)uninit(localReader);if(!disposed&&token===generation)api.message('预览失败，可点击“打开 PDF”。',point);
+    }finally{
+     if(localSession){localSession.opening=false;if(localSession.retired||disposed||token!==generation)finishSession(localSession);}
     }
    },
    contains:node=>!!panel?.contains(node),get visible(){return visible;},
@@ -138,8 +143,9 @@ var ZEHoverPreview = {
    controller.hover(item,{screenX:event.screenX,screenY:event.screenY},event.altKey);
   });
   on(doc,'keydown',event=>{if(event.key==='Escape'&&view.visible){event.preventDefault();event.stopPropagation();controller.close();}else if(event.key==='Alt'&&!editing(event.target))controller.activate();});
-  on(doc,'keyup',event=>{if(event.key==='Alt'&&view.visible){event.preventDefault();event.stopPropagation();}});
-  on(doc,'mousedown',event=>{if(!view.contains(event.target))controller.close();});on(doc,'wheel',()=>controller.close());on(win,'blur',()=>controller.close());
+  on(doc,'keyup',event=>{if(event.key==='Alt'){controller.releaseAlt();if(view.visible){event.preventDefault();event.stopPropagation();}}});
+  on(doc,'mousedown',event=>{if(!view.contains(event.target))controller.close();});on(doc,'wheel',()=>controller.close());
+  on(win,'blur',event=>{if(event.target===win||(typeof doc.hasFocus==='function'&&!doc.hasFocus()))controller.close();});
   return {dispose(){for(const remove of listeners)remove();controller.dispose();view.dispose();}};
  }
 };
