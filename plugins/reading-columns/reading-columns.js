@@ -35,8 +35,9 @@ var ReadingColumns = (() => {
   }
   const READ_TAG='阅读状态-已读';
   const LAYOUT_PREF='extensions.zotero.readingRouteColumns.layoutVersion';
+  const SORT_PREF='extensions.zotero.readingRouteColumns.descendingDefault';
   const writes=new WeakMap();
-  let keys=[], windows=new Map(), zotero=null, migrateLayout=false;
+  let keys=[], windows=new Map(), zotero=null, migrateLayout=false, migrateSort=false;
   function canMarkRead(item) {
     return !!item && !item.parentID && (item.isRegularItem?.() ||
       (item.isAttachment?.() && item.attachmentContentType==='application/pdf'));
@@ -169,9 +170,42 @@ var ReadingColumns = (() => {
   function selected(win) {
     try { return win.ZoteroPane.getSelectedCollection()?.key || ''; } catch {return '';}
   }
+  function updateEditButton(win,state) {
+    if(!state.button)return;
+    state.button.textContent=state.editing?'完成编辑':'编辑';
+    state.button.setAttribute('aria-pressed',String(state.editing));
+    state.button.disabled=state.toggling||state.busy||!branches[selected(win)];
+    state.button.title=branches[selected(win)]?'统一编辑阅读顺序与分支定位；Enter 或失焦保存，Esc 取消当前输入':'当前分类尚未配置阅读路线';
+  }
+  async function flushEditor(state) {
+    await state.activeEditor?.save();
+    await Promise.all([...state.pending]);
+  }
+  function ensureEditButton(win,state) {
+    if(state.button&&state.button.isConnected!==false)return;
+    const doc=win.document,toolbar=doc?.getElementById?.('zotero-items-toolbar');
+    if(!toolbar||!doc.createElementNS)return;
+    const button=doc.createElementNS('http://www.w3.org/1999/xhtml','button');
+    button.id='ze-reader-edit-routes';button.type='button';button.setAttribute('aria-label','统一编辑阅读顺序与分支定位');
+    Object.assign(button.style,{font:'inherit',color:'inherit',background:'transparent',border:'1px solid GrayText',borderRadius:'4px',padding:'3px 8px',margin:'0 6px',whiteSpace:'nowrap',cursor:'pointer'});
+    const toggle=async()=>{
+      if(state.disposed||state.toggling||state.busy||!branches[selected(win)])return;
+      state.toggling=true;updateEditButton(win,state);
+      try {
+        await flushEditor(state);if(state.disposed)return;
+        state.editing=!state.editing;state.activeEditor=null;
+        await win.ZoteroPane?.itemsView?.refreshAndMaintainSelection();
+      }catch(error){zotero.logError(error);state.last=null;}
+      finally{state.toggling=false;updateEditButton(win,state);}
+    };
+    button.addEventListener('click',toggle);state.button=button;state.toggle=toggle;
+    const before=doc.getElementById('zotero-tb-search-spinner')||doc.getElementById('zotero-tb-search');
+    if(before?.parentNode===toolbar)toolbar.insertBefore(button,before);else toolbar.appendChild(button);
+    updateEditButton(win,state);
+  }
   function renderRouteCell(name,index,data,column,isFirst,doc) {
     const span=doc.createElement('span');span.className='cell '+(column.className||'');
-    const win=doc.defaultView,item=win.ZoteroPane?.itemsView?.getRow(index)?.ref,collectionKey=selected(win);
+    const win=doc.defaultView,item=win.ZoteroPane?.itemsView?.getRow(index)?.ref,collectionKey=selected(win),state=windows.get(win);
     if(!canMarkRead(item)||!branches[collectionKey]){span.textContent=item?value(item,win)[name]:data;return span;}
     Object.assign(span.style,{display:'flex',alignItems:'center'});
     const isOrder=name==='order',label=isOrder?'阅读顺序':'分支定位';
@@ -179,38 +213,38 @@ var ReadingColumns = (() => {
     editor.className='route-editor';text.className='route-value';
     Object.assign(editor.style,{display:'flex',alignItems:'center',width:'100%',minWidth:'0',gap:'4px'});
     Object.assign(text.style,{flex:'1 1 auto',minWidth:'0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textAlign:isOrder?'center':'left'});
-    const button=doc.createElementNS('http://www.w3.org/1999/xhtml','button');
-    button.type='button';button.textContent='编辑';button.setAttribute('aria-label','编辑'+label);button.title='编辑'+label;
-    Object.assign(button.style,{flex:'0 0 auto',font:'inherit',fontSize:'11px',padding:'0 3px',color:'inherit',background:'transparent',border:'1px solid GrayText',borderRadius:'3px',cursor:'pointer'});
     const input=doc.createElementNS('http://www.w3.org/1999/xhtml','input');
-    let composing=false,editing=false;
+    let composing=false,saving=null;
     input.type='text';input.maxLength=isOrder?2:120;input.size=isOrder?2:20;input.placeholder=isOrder?'—':'填写定位';if(isOrder)input.setAttribute('inputmode','numeric');input.setAttribute('aria-label',label);
     input.title=isOrder?'输入 01–99；Enter 或离开输入框保存，Esc 取消，留空清除':'输入自己的定位；Enter 或离开输入框保存，Esc 取消；留空时显示路线标签对应的默认定位（如有）';
     Object.assign(input.style,{width:'100%',minWidth:'0',boxSizing:'border-box',font:'inherit',color:'inherit',background:'transparent',border:'1px solid GrayText',borderRadius:'3px',textAlign:isOrder?'center':'left'});
     const restore=()=>{input.value=display(item.getTags(),collectionKey)[name];text.textContent=input.value||'—';text.title=input.value;};
-    const finish=()=>{editing=false;composing=false;restore();input.readOnly=true;input.hidden=true;text.hidden=false;button.hidden=false;};finish();
-    const begin=()=>{if(editing||input.disabled)return;restore();editing=true;input.readOnly=false;input.hidden=false;text.hidden=true;button.hidden=true;input.focus?.();input.select?.();};
-    const save=async()=>{
-      if(!editing||input.disabled)return;
-      if(input.value===display(item.getTags(),collectionKey)[name]){finish();return;}
+    const finish=()=>{composing=false;restore();input.readOnly=!state?.editing||state.disposed;input.hidden=input.readOnly;text.hidden=!input.readOnly;};finish();
+    const save=()=>{
+      if(saving)return saving;
+      if(!state?.editing||state.disposed||input.disabled||input.value===display(item.getTags(),collectionKey)[name])return Promise.resolve();
       const draft=input.value;input.disabled=true;
-      try {await (isOrder?setOrder:setPosition)(item,collectionKey,draft);await refreshWindows();}
-      catch(error){zotero.logError(error);win.alert(label+'未保存。\n'+String(error.message||error));}
-      finally {input.disabled=false;finish();}
+      saving=(async()=>{
+        try {await (isOrder?setOrder:setPosition)(item,collectionKey,draft);await refreshWindows();}
+        catch(error){zotero.logError(error);win.alert(label+'未保存。\n'+String(error.message||error));}
+        finally {input.disabled=false;finish();}
+      })();
+      const task=saving;state.pending.add(task);
+      const cleanup=()=>{state.pending.delete(task);saving=null;};void task.then(cleanup,cleanup);return task;
     };
+    const editorState={save};
+    input.addEventListener('focus',()=>{if(state?.editing&&!state.disposed)state.activeEditor=editorState;});
     // VirtualizedTable focuses the row on mouseup as well as mousedown.
     for(const type of ['mousedown','mouseup','click','dblclick'])input.addEventListener(type,event=>event.stopPropagation());
-    for(const type of ['mousedown','mouseup','dblclick','keydown'])button.addEventListener(type,event=>event.stopPropagation());
-    button.addEventListener('click',event=>{event.stopPropagation();begin();});
     input.addEventListener('compositionstart',()=>{composing=true;});input.addEventListener('compositionend',()=>{composing=false;});
     input.addEventListener('keydown',async event=>{
       event.stopPropagation();
       if(composing||event.isComposing||event.keyCode===229)return;
       if(event.key==='Enter'){event.preventDefault();await save();}
-      else if(event.key==='Escape'){event.preventDefault();finish();button.focus?.();}
+      else if(event.key==='Escape'){event.preventDefault();finish();input.blur?.();}
     });
-    editor.appendChild(text);editor.appendChild(button);editor.appendChild(input);
-    input.addEventListener('blur',save);return appendCellControl(span,editor,isFirst,doc);
+    editor.appendChild(text);editor.appendChild(input);
+    input.addEventListener('blur',()=>{const task=save();if(state?.activeEditor===editorState)state.activeEditor=null;return task;});return appendCellControl(span,editor,isFirst,doc);
   }
   function value(item,win) {
     if(!item || item.parentID) return {order:'',position:'',read:''};
@@ -218,14 +252,16 @@ var ReadingColumns = (() => {
   }
   async function setupWindow(win) {
     if(windows.has(win)) return;
-    const state={last:null,busy:false,timer:null,configured:false};
+    const state={last:null,busy:false,timer:null,configured:false,editing:false,toggling:false,disposed:false,button:null,toggle:null,activeEditor:null,pending:new Set()};
     windows.set(win,state);
     const refresh=async()=>{
-      if(win.closed) {win.clearInterval(state.timer);windows.delete(win);return;}
+      if(win.closed) {releaseWindow(win);return;}
+      ensureEditButton(win,state);updateEditButton(win,state);
       const collection=selected(win), view=win.ZoteroPane?.itemsView;
-      if(state.busy || !view || collection===state.last) return;
+      if(state.busy || state.toggling || !view || collection===state.last) return;
       state.busy=true;
       try {
+        await flushEditor(state);state.editing=false;state.activeEditor=null;updateEditButton(win,state);
         await view.refreshAndMaintainSelection();
         if(!state.configured) {
           if(migrateLayout) {
@@ -246,19 +282,27 @@ var ReadingColumns = (() => {
           }
           state.configured=true;
         }
+        if(migrateSort&&view._getColumns){
+          const i=view._getColumns().findIndex(c=>c.dataKey===keys[1]);
+          if(i>=0){
+            if(view.getSortField()===keys[1]&&view.getSortDirection()===1)view.toggleSort(i);
+            zotero.Prefs.set(SORT_PREF,true,true);migrateSort=false;
+          }
+        }
         state.last=collection;
-      } catch(e) {zotero.logError(e);} finally {state.busy=false;}
+      } catch(e) {zotero.logError(e);} finally {state.busy=false;updateEditButton(win,state);}
     };
-    state.timer=win.setInterval(()=>{void refresh();},400);
+    state.timer=win.setInterval(()=>refresh(),400);
     await refresh();
   }
   async function start(Zotero,pluginID='reading-route-columns@local.example') {
     zotero=Zotero;
     if(keys.length) return keys;
     migrateLayout=Zotero.Prefs.get(LAYOUT_PREF,true)!==2;
+    migrateSort=Zotero.Prefs.get(SORT_PREF,true)!==true;
     for(const [name,label,width] of [['read','已读','60'],['order','阅读顺序','84'],['position','分支定位','240']]) {
       const key=await Zotero.ItemTreeManager.registerColumn({
-        dataKey:name,label,pluginID,width,minWidth:60,enabledTreeIDs:['main'],
+        dataKey:name,label,pluginID,width,minWidth:60,enabledTreeIDs:['main'],sortReverse:name==='order',
         zoteroPersist:['width','hidden','sortDirection'],
         dataProvider:item=>value(item,Zotero.getMainWindow())[name],
         renderCell:name==='read'?renderReadCell:(...args)=>renderRouteCell(name,...args)
@@ -271,11 +315,14 @@ var ReadingColumns = (() => {
   }
   function releaseWindow(win) {
     const state=windows.get(win);
-    if(state) {try{win.clearInterval(state.timer);}catch{} windows.delete(win);}
+    if(state) {
+      state.disposed=true;state.editing=false;state.activeEditor=null;
+      try{win.clearInterval(state.timer);state.button?.removeEventListener('click',state.toggle);state.button?.remove();}catch{}
+      windows.delete(win);
+    }
   }
   async function stop() {
-    for(const [win,state] of windows) {try{win.clearInterval(state.timer);}catch{}}
-    windows.clear();
+    for(const win of windows.keys())releaseWindow(win);
     for(const key of keys) await zotero.ItemTreeManager.unregisterColumn(key);
     keys=[];
   }

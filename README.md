@@ -2,7 +2,7 @@
 
 ## ZE Reader 桌面插件
 
-[ZE Reader 安装与使用](plugins/ze-reader/README.md) 0.4.2 提供已读、阅读顺序与分支定位三列；路线列默认只读，点击“编辑”后输入。支持鼠标悬停预览本机 PDF、滚轮翻页和收起右侧内部标签。工作台与翻译桥接保持移除。面向 Zotero 10.0.x；运行 `npm.cmd run build:plugin` 生成 `plugins/ze-reader/ze-reader.xpi`。下方介绍的是另行运行的 ZE 网页阅读器。
+[ZE Reader 安装与使用](plugins/ze-reader/README.md) 0.4.3 提供已读、阅读顺序与分支定位三列；路线列默认只读，文献列表上方一个“编辑／完成编辑”按钮统一控制输入，阅读顺序默认降序。支持鼠标悬停预览本机 PDF、滚轮翻页和收起右侧内部标签。工作台与翻译桥接保持移除。面向 Zotero 10.0.x；运行 `npm.cmd run build:plugin` 生成 `plugins/ze-reader/ze-reader.xpi`。下方介绍的是另行运行的 ZE 网页阅读器。
 
 在浏览器里阅读自己的 Zotero 论文，支持电脑、iPad 和手机。
 

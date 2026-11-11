@@ -25,16 +25,16 @@ function dom(){
  };
 }
 function environment(paper,{prefs=new Map(),sort='order'}={}){
- const columns=[{dataKey:'title',hidden:false},{dataKey:'order',hidden:false},{dataKey:'position',hidden:false},{dataKey:'read',hidden:true}];
+ const columns=[{dataKey:'title',hidden:false},{dataKey:'order',hidden:false},{dataKey:'position',hidden:false},{dataKey:'read',hidden:true}];columns.find(c=>c.dataKey===sort).sortDirection=1;
  const definitions=[],errors=[],alerts=[];
  const view={sort,refreshes:0,_getColumns:()=>columns,getRow:()=>({ref:paper}),
   async refreshAndMaintainSelection(){this.refreshes++;},getSortField(){return this.sort;},
-  getSortDirection:()=>1,toggleSort(i){this.sort=columns[i].dataKey;},
+  getSortDirection:()=>columns.find(c=>c.dataKey===view.sort)?.sortDirection||1,toggleSort(i){this.sort=columns[i].dataKey;for(const [j,col] of columns.entries()){if(j===i)col.sortDirection=col.sortDirection?-col.sortDirection:col.sortReverse?-1:1;else delete col.sortDirection;}},
   tree:{_columns:{toggleHidden(i){columns[i].hidden=!columns[i].hidden;},setOrder(i,j){columns.splice(j,0,columns.splice(i,1)[0]);}}}
  };
  const win={ZoteroPane:{getSelectedCollection:()=>({key:win.collection}),itemsView:view},collection:'BJED65AU',
   setInterval(fn){win.tick=fn;return 1;},clearInterval(){},alert:message=>alerts.push(message)};
- const zotero={ItemTreeManager:{registerColumn:options=>{definitions.push(options);return options.dataKey;},unregisterColumn:()=>{}},
+ const zotero={ItemTreeManager:{registerColumn:options=>{definitions.push(options);Object.assign(columns.find(c=>c.dataKey===options.dataKey),{sortReverse:options.sortReverse});return options.dataKey;},unregisterColumn:()=>{}},
   getMainWindows:()=>[win],getMainWindow:()=>win,logError:error=>errors.push(error),
   Prefs:{get:key=>prefs.get(key),set:(key,value)=>prefs.set(key,value)}
  };
@@ -162,4 +162,22 @@ test('releasing the read checkbox mouse button does not bubble into native row s
  let stopped=false;await box.handlers.mouseup?.({stopPropagation(){stopped=true;}});
  assert.equal(stopped,true);box.checked=true;await box.handlers.change({stopPropagation(){}});
  assert.equal(api.isRead(paper),true);await api.stop();
+});
+
+test('reading order defaults to descending, upgrades an active ascending sort once and preserves later choices',async()=>{
+ const api=load(),prefs=new Map([['extensions.zotero.readingRouteColumns.layoutVersion',2]]),env=environment(item(),{prefs});
+ await api.start(env.zotero);
+ assert.equal(env.view.getSortField(),'order');assert.equal(env.view.getSortDirection(),-1);
+ assert.equal(env.definitions.find(c=>c.dataKey==='order').sortReverse,true);
+ const index=key=>env.columns.findIndex(c=>c.dataKey===key);
+ env.view.toggleSort(index('order'));assert.equal(env.view.getSortDirection(),1);
+ env.win.collection='K57JIGUF';await env.win.tick();assert.equal(env.view.getSortDirection(),1);
+ await api.stop();await api.start(env.zotero);assert.equal(env.view.getSortDirection(),1,'a reload respects a subsequent ascending choice');
+ env.view.toggleSort(index('title'));env.view.toggleSort(index('order'));assert.equal(env.view.getSortDirection(),-1,'a fresh order sort starts descending');
+ await api.stop();
+});
+
+test('descending default does not replace an unrelated active sort',async()=>{
+ const api=load(),prefs=new Map([['extensions.zotero.readingRouteColumns.layoutVersion',2]]),env=environment(item(),{prefs,sort:'title'});
+ await api.start(env.zotero);assert.equal(env.view.getSortField(),'title');assert.equal(env.view.getSortDirection(),1);await api.stop();
 });
