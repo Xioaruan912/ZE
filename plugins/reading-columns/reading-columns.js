@@ -62,6 +62,34 @@ var ReadingColumns = (() => {
     try {await task;}
     finally {if(writes.get(item)===task) writes.delete(item);}
   }
+  async function setOrder(item,collectionKey,input) {
+    if(!canMarkRead(item)) throw new Error('只能为论文或独立 PDF 设置阅读顺序');
+    const branch=branches[collectionKey];
+    if(!branch) throw new Error('当前分类尚未配置阅读路线');
+    const raw=typeof input==='string'?input.trim():'invalid';
+    if(raw && (!/^\d{1,2}$/.test(raw)||Number(raw)<1||Number(raw)>99)) throw new Error('阅读顺序请输入 01–99，留空可清除');
+    const order=raw?raw.padStart(2,'0'):'';
+    const previous=writes.get(item)||Promise.resolve();
+    const task=previous.catch(()=>{}).then(async()=>{
+      const old=item.getTags().map(tag=>({...tag,match:/^阅读顺序-([^-]+)-(\d{2})-([^-]+)-(.+)$/.exec(tag.tag)})).filter(tag=>tag.match?.[1]===branch);
+      const first=old[0]?.match;
+      const title=String(item.getField?.('title')||item.key||'文献').replace(/[\r\n]+/g,' ').trim().slice(0,80)||'文献';
+      const next=order?'阅读顺序-'+branch+'-'+order+'-'+(first?first[3]:'自定')+'-'+(first?first[4]:title):'';
+      if((!next&&!old.length)||(old.length===1&&old[0].tag===next)) return;
+      try {
+        for(const tag of old)item.removeTag(tag.tag);
+        if(next)item.addTag(next,0);
+        await item.saveTx();
+      } catch(error) {
+        if(next)item.removeTag(next);
+        for(const tag of old)item.addTag(tag.tag,tag.type);
+        throw error;
+      }
+    });
+    writes.set(item,task);
+    try {await task;}
+    finally {if(writes.get(item)===task)writes.delete(item);}
+  }
   async function refreshWindows() {
     for(const win of windows.keys()) {
       try {if(!win.closed) await win.ZoteroPane?.itemsView?.refreshAndMaintainSelection();}
@@ -110,6 +138,31 @@ var ReadingColumns = (() => {
   }
   function selected(win) {
     try { return win.ZoteroPane.getSelectedCollection()?.key || ''; } catch {return '';}
+  }
+  function renderOrderCell(index,data,column,isFirst,doc) {
+    const span=doc.createElement('span');span.className='cell '+(column.className||'');
+    const win=doc.defaultView,item=win.ZoteroPane?.itemsView?.getRow(index)?.ref,collectionKey=selected(win);
+    if(!canMarkRead(item)||!branches[collectionKey]){span.textContent=item?value(item,win).order:data;return span;}
+    const input=doc.createElementNS('http://www.w3.org/1999/xhtml','input');
+    input.type='text';input.maxLength=2;input.size=2;input.placeholder='—';input.setAttribute('inputmode','numeric');input.setAttribute('aria-label','阅读顺序');
+    input.title='输入 01–99；Enter 或离开输入框保存，Esc 取消，留空清除';
+    Object.assign(input.style,{width:'100%',minWidth:'0',boxSizing:'border-box',font:'inherit',color:'inherit',background:'transparent',border:'1px solid GrayText',borderRadius:'3px',textAlign:'center'});
+    const restore=()=>{input.value=display(item.getTags(),collectionKey).order;};restore();
+    const save=async()=>{
+      if(input.disabled)return;
+      if(input.value===display(item.getTags(),collectionKey).order)return;
+      const draft=input.value;input.disabled=true;
+      try {await setOrder(item,collectionKey,draft);await refreshWindows();}
+      catch(error){zotero.logError(error);win.alert('阅读顺序未保存。\n'+String(error.message||error));}
+      finally {restore();input.disabled=false;}
+    };
+    for(const type of ['mousedown','click','dblclick'])input.addEventListener(type,event=>event.stopPropagation());
+    input.addEventListener('keydown',async event=>{
+      event.stopPropagation();
+      if(event.key==='Enter'){event.preventDefault();await save();}
+      else if(event.key==='Escape'){event.preventDefault();restore();}
+    });
+    input.addEventListener('blur',save);span.appendChild(input);return span;
   }
   function value(item,win) {
     if(!item || item.parentID) return {order:'',position:'',read:''};
@@ -160,7 +213,7 @@ var ReadingColumns = (() => {
         dataKey:name,label,pluginID,width,minWidth:60,enabledTreeIDs:['main'],
         zoteroPersist:['width','hidden','sortDirection'],
         dataProvider:item=>value(item,Zotero.getMainWindow())[name],
-        renderCell:name==='read'?renderReadCell:(index,data,column,isFirst,doc)=>{
+        renderCell:name==='read'?renderReadCell:name==='order'?renderOrderCell:(index,data,column,isFirst,doc)=>{
           const span=doc.createElement('span');
           span.className='cell '+(column.className || '');
           const item=doc.defaultView.ZoteroPane?.itemsView?.getRow(index)?.ref;
@@ -185,5 +238,5 @@ var ReadingColumns = (() => {
     for(const key of keys) await zotero.ItemTreeManager.unregisterColumn(key);
     keys=[];
   }
-  return {display,isRead,setRead,start,stop,setupWindow,releaseWindow};
+  return {display,isRead,setRead,setOrder,start,stop,setupWindow,releaseWindow};
 })();
