@@ -13,6 +13,6 @@ export function environment(){
  setInterval(){const id=++next;timers.add(id);return id;},clearInterval(id){timers.delete(id);}};
  const Zotero={initializationPromise:Promise.resolve(),Prefs:{get:k=>prefs.get(k),set:(k,v)=>prefs.set(k,v)},
  ItemTreeManager:{registerColumn(o){if(registered.has(o.dataKey))throw Error('duplicate');registered.set(o.dataKey,o);return o.dataKey;},unregisterColumn(k){registered.delete(k);}},
- getMainWindows:()=>[win],getMainWindow:()=>win,logError:e=>errors.push(e),Server:{Endpoints:{}}};
+ getMainWindows:()=>[win],getMainWindow:()=>win,logError:e=>errors.push(e),debug(){},Server:{Endpoints:{}}};
  return {Zotero,win,prefs,registered,timers,errors};
 }

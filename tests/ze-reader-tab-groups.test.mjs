@@ -31,3 +31,8 @@ test('damaged local groups remain intact until explicitly rebuilt',async()=>{
  assert.ok(env.groups.listGroups().warning);
  await assert.rejects(env.groups.saveGroup('New',{}));assert.equal(env.prefs.get(key),'damaged');
 });
+
+test('restore does not claim a PDF tab opened when the platform only reuses a separate window',async()=>{
+ const env=setup();await env.groups.saveGroup('Group',{});env.setTabs([]);env.adapter.openAttachment=async()=>{};
+ const result=await env.groups.restoreGroup('Group',{});assert.equal(result.opened,0);assert.equal(result.skipped.length,2);
+});

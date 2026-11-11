@@ -25,9 +25,11 @@ var ZEAdapter = {
    async openAttachment(ref,win){
     const item=await adapter.resolveAttachment(ref);
     if(!item)throw Error('附件已删除或不可访问');
+    const existing=(await adapter.listPDFTabs(win)).find(tab=>tab.libraryID===ref.libraryID&&tab.attachmentKey===ref.attachmentKey);
+    if(existing){adapter.selectTab(existing.tabID,win);return;}
     if(item.fileExists && !await item.fileExists())throw Error('附件文件尚未下载或已缺失');
     if(!Zotero.Reader?.open)throw Error('PDF 阅读接口不可用');
-    win?.focus?.();await Zotero.Reader.open(item.id,undefined,{allowDuplicate:false});
+    win?.focus?.();await Zotero.Reader.open(item.id,undefined,{allowDuplicate:true});
    },
    async getScopeItems(win,scope){
     let items;

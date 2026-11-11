@@ -8,7 +8,7 @@ var ZEWorkbench = {
  },
  mount(doc,{owner,groups,summary,matrix,store,adapter}){
   const $=id=>doc.getElementById(id),listeners=[],create=(tag,text)=>{const node=doc.createElementNS('http://www.w3.org/1999/xhtml',tag);if(text!==undefined)node.textContent=text;return node;};
-  let disposed=false,request=0,abort=null,view='tabs',snapshot={papers:[],records:[],warnings:[]},page=0,ruleRows=[];
+  let disposed=false,request=0,abort=null,view='tabs',snapshot={papers:[],records:[],warnings:[]},snapshotValid=false,page=0,ruleRows=[];
   const message=text=>{if(!disposed)$('ze-message').textContent=text;};
   const on=(id,type,action)=>{const node=$(id),handler=async event=>{try{await action(event);}catch{message('操作未完成，请检查所选文献、配置和附件后重试。');}};
    node.addEventListener(type,handler);listeners.push(()=>node.removeEventListener(type,handler));};
@@ -45,7 +45,8 @@ var ZEWorkbench = {
    row.append(name,kind,value,remove);ruleRows.push({row,name,kind,value});$('ze-rules').append(row);
   }
   function drawMatrix(){
-   const rules=currentRules(),container=$('ze-matrix');container.replaceChildren();$('ze-copy-matrix').disabled=!rules.length;
+   const rules=currentRules(),container=$('ze-matrix');container.replaceChildren();$('ze-copy-matrix').disabled=!snapshotValid||!rules.length;
+   if(!snapshotValid){container.textContent='请等待当前范围读取完成后再生成矩阵。';return;}
    if(!rules.length){container.textContent='请添加并保存矩阵规则：指定列名，再选择标注颜色或精确标签。';return;}
    const rows=matrix.build(snapshot,rules),table=create('table'),head=create('thead'),tr=create('tr');
    for(const label of ['文献',...rules.map(x=>x.name)]){const th=create('th',label);th.setAttribute('scope','col');tr.append(th);}head.append(tr);table.append(head);
@@ -65,12 +66,15 @@ var ZEWorkbench = {
    $('ze-count').textContent=tabs.length+' 个已打开 PDF';
   }
   async function refresh(){
+   if(disposed)return;
    const serial=++request;abort?.abort();abort=new doc.defaultView.AbortController();const signal=abort.signal;
+   snapshotValid=false;snapshot={papers:[],records:[],warnings:[]};$('ze-copy-matrix').disabled=true;
+   $('ze-records').replaceChildren();$('ze-matrix').replaceChildren();
    $('ze-count').textContent='正在读取…';
    try{
     if(view==='tabs'){await drawTabs(serial);return;}
     const result=await summary.collect(owner,$('ze-scope').value,{signal,onProgress:progress=>{if(!disposed&&serial===request)$('ze-count').textContent='已读取 '+progress.papers+' 篇文献 · '+progress.records+' 条内容';}});
-    if(disposed||serial!==request)return;snapshot=result;page=0;
+    if(disposed||serial!==request)return;snapshot=result;snapshotValid=true;page=0;
     $('ze-count').textContent=snapshot.papers.length+' 篇文献 · '+snapshot.records.length+' 条笔记与标注';
     choices('ze-color',[...new Set(snapshot.records.map(x=>x.color).filter(Boolean))]);choices('ze-tag',[...new Set(snapshot.records.flatMap(x=>x.tags))]);
     if(view==='notes')renderNotes();else drawMatrix();message(snapshot.warnings.join(' '));
@@ -95,7 +99,7 @@ var ZEWorkbench = {
    store.writeDocument('rules',{version:1,rules});drawRules();drawMatrix();message('矩阵规则已保存。');
   });
   on('ze-rules-reset','click',()=>{store.writeDocument('rules',{version:1,rules:[]},{replaceInvalid:true});drawRules();drawMatrix();});
-  on('ze-copy-matrix','click',()=>{const rules=currentRules();if(!rules.length)return;adapter.copyText(matrix.toMarkdown(matrix.build(snapshot,rules),rules,source=>adapter.sourceURL(source)));message('矩阵已复制为 Markdown。');});
+  on('ze-copy-matrix','click',()=>{if(disposed||view!=='matrix'||!snapshotValid)return;const rules=currentRules();if(!rules.length)return;adapter.copyText(matrix.toMarkdown(matrix.build(snapshot,rules),rules,source=>adapter.sourceURL(source)));message('矩阵已复制为 Markdown。');});
   const controller={refresh,dispose(){disposed=true;request++;abort?.abort();for(const remove of listeners)remove();}};
   controller.ready=(async()=>{try{const selected=await adapter.getScopeItems(owner,'selected');if(disposed)return;$('ze-scope').value=selected.length?'selected':'current';await refresh();}catch{message('文献范围不可用，请返回 Zotero 主窗口后重试。');}})();
   return controller;

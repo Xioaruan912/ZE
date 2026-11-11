@@ -1,7 +1,24 @@
 var ZEBridge = {
  create({Zotero,store,adapter,pluginID}){
   const path='/paper-reader/translate';
-  let endpoint=null,base={state:'unavailable',message:'翻译桥接未启动'};
+  let endpoint=null,releaseDebug=null,base={state:'unavailable',message:'翻译桥接未启动'};
+  function protectDebug(){
+   const original=Zotero.debug;
+   if(typeof original!=='function')throw Error('安全调试日志接口不可用');
+   let tokenProvider=()=>store.getToken();
+   const wrapper=function(message,...args){
+    if(tokenProvider&&typeof message==='string'){
+     try{
+      message=message.replace(/("token"\s*:\s*")(?:\\.|[^"\\])*(?:"|$)/gi,'$1[REDACTED]"');
+      const token=tokenProvider();
+      if(token)for(const value of [...new Set([token,JSON.stringify(token).slice(1,-1)])].sort((a,b)=>b.length-a.length))message=message.split(value).join('[REDACTED]');
+     }catch{message='[ZE Reader debug content redacted]';}
+    }
+    return original.call(this,message,...args);
+   };
+   Zotero.debug=wrapper;
+   return ()=>{if(Zotero.debug===wrapper)Zotero.debug=original;tokenProvider=null;};
+  }
   const json=(status,data)=>[status,'application/json',JSON.stringify(data)];
   const bridge={
    status(){
@@ -35,9 +52,10 @@ var ZEBridge = {
       }catch{return json(502,{error:'翻译请求失败，请检查翻译插件和网络后重试'});}
      }
     };
+    releaseDebug=protectDebug();
     Zotero.Server.Endpoints[path]=endpoint;base={state:'ready',message:'翻译桥接已注册'};return bridge.status();
    },
-   stop(){if(endpoint&&Zotero.Server?.Endpoints?.[path]===endpoint)delete Zotero.Server.Endpoints[path];endpoint=null;base={state:'unavailable',message:'翻译桥接已停止'};},
+   stop(){if(endpoint&&Zotero.Server?.Endpoints?.[path]===endpoint)delete Zotero.Server.Endpoints[path];releaseDebug?.();releaseDebug=null;endpoint=null;base={state:'unavailable',message:'翻译桥接已停止'};},
    async testTranslation(){
     const state=bridge.status();if(state.state!=='ready')throw Error(state.message);
     const response=await new endpoint().init({data:{token:store.getToken(),text:'Hello world.'}});

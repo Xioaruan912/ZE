@@ -28,7 +28,9 @@ var ZETabGroups = {
      try{
       const current=await adapter.listPDFTabs(win);
       if(current.some(x=>identity(x)===id)){result.reused++;continue;}
-      await adapter.openAttachment(ref,win);result.opened++;
+      await adapter.openAttachment(ref,win);
+      if(!(await adapter.listPDFTabs(win)).some(x=>identity(x)===id))throw Error('未创建 PDF 标签页');
+      result.opened++;
      }catch{result.skipped.push({ref,reason:'附件不可打开，请检查文件是否存在、是否已下载以及访问权限。'});}
     }
     return result;
