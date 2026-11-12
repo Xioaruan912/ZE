@@ -1,5 +1,5 @@
 var ZERuntime = {
- create({Zotero,id,cloneInto}) {
+ create({Zotero,id,cloneInto,unwrap}) {
   let started=false,pins=null;
   const states={},enhancements=new Map();
   const runtime={
@@ -15,7 +15,7 @@ var ZERuntime = {
      Zotero.logError(new Error(states.columns.message));
     }
     if(typeof ZEPins!=='undefined'){
-     try{pins=ZEPins.create({Zotero,id,cloneInto});pins.start();states.pins={state:'ready'};}
+     try{pins=ZEPins.create({Zotero,id,cloneInto,unwrap});pins.start();states.pins={state:'ready'};}
      catch(error){pins?.dispose();pins=null;states.pins={state:'unavailable'};Zotero.logError(error);}
     }
     for(const win of Zotero.getMainWindows())await runtime.setupWindow(win);

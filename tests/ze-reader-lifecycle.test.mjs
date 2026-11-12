@@ -36,9 +36,10 @@ test('a native enhancement failure does not disable the reading columns or the o
 });
 
 test('reader pin hooks start once globally, release window resources and dispose on plugin stop',async()=>{
- const env=environment(),events=[];
- const scope=load(['reading-columns.js','runtime.js'],{ZEPins:{create:()=>({start(){events.push('start');},releaseWindow:win=>events.push(win),dispose(){events.push('dispose');}})}});
- const runtime=scope.ZERuntime.create({...env,id:'test'});await runtime.start();await runtime.start();assert.deepEqual(events,['start']);
+ const env=environment(),events=[],unwrap=value=>value,cloneInto=value=>value;let received;
+ const scope=load(['reading-columns.js','runtime.js'],{ZEPins:{create:options=>{received=options;return {start(){events.push('start');},releaseWindow:win=>events.push(win),dispose(){events.push('dispose');}};}}});
+ const runtime=scope.ZERuntime.create({...env,id:'test',unwrap,cloneInto});await runtime.start();await runtime.start();assert.deepEqual(events,['start']);
+ assert.equal(received.unwrap,unwrap);assert.equal(received.cloneInto,cloneInto);
  runtime.releaseWindow(env.win);assert.equal(events[1],env.win);await runtime.stop();assert.equal(events.at(-1),'dispose');
 });
 

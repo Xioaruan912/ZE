@@ -18,10 +18,11 @@ var ZEPins = {
   const v=page.viewport,point=p=>v.convertToPdfPoint((p.x-box.left)*v.width/box.width,(p.y-box.top)*v.height/box.height);
   return {pageIndex:page.id-1,rects:[ZEPins.rect([...point(start),...point(end)],page.pdfPage.view)]};
  },
- async renderRegion({app,document,position,request,cloneInto}){
+ async renderRegion({app,document,position,request,cloneInto,unwrap=value=>value}){
   if(request.cancelled)throw Error('已取消');
-  const p=ZEPins.selectionPosition({position}),page=await app.pdfDocument.getPage(p.pageIndex+1);
+  const p=ZEPins.selectionPosition({position}),page=unwrap(await app.pdfDocument.getPage(p.pageIndex+1));
   if(request.cancelled)throw Error('已取消');
+  if(typeof page?.getViewport!=='function'||typeof page.render!=='function')throw Error('PDF 页面尚未就绪，请稍后重试');
   const raw=p.rects[0],rect=ZEPins.rect([raw[0]-2,raw[1]-2,raw[2]+2,raw[3]+2],page.view);
   const into=value=>cloneInto?cloneInto(value,document.defaultView):value;
   const rotation=app.pdfViewer?.getPageView?.(p.pageIndex)?.viewport?.rotation??page.rotate;
@@ -45,7 +46,7 @@ var ZEPins = {
    return {view,win,doc:win?.document,frame:view._iframe||raw?.frameElement,app:win?.PDFViewerApplication};
   }).filter(x=>x.doc&&x.app?.pdfDocument&&x.app.pdfViewer);
  },
- create({Zotero,id,renderRegion=ZEPins.renderRegion,cloneInto}){
+ create({Zotero,id,renderRegion=ZEPins.renderRegion,cloneInto,unwrap}){
   let started=false,disposed=false,capture=null;
   const boards=new Map(),documents=new Map();
   const html=(doc,name,text)=>{const node=doc.createElementNS('http://www.w3.org/1999/xhtml',name);if(text!==undefined)node.textContent=text;return node;};
@@ -97,7 +98,7 @@ var ZEPins = {
     const saved={itemID:source.id,key:source.key,libraryID:source.libraryID,title:parent?.getField?.('title')||parent?.getDisplayTitle?.()||'PDF',position:ZEPins.selectionPosition({position})};
     const target=view||ZEPins.views(reader)[0];if(!target)throw Error('请切回 PDF 原始版式后固定');
     token={cancelled:false,cancel:null,reader};state.pending.add(token);state.message('正在固定选区…');
-    const data=await renderRegion({app:target.app,document:target.doc,position:saved.position,request:token,cloneInto});
+    const data=await renderRegion({app:target.app,document:target.doc,position:saved.position,request:token,cloneInto,unwrap});
     if(disposed||state.disposed||token.cancelled)return;
     const doc=state.win.document,node=html(doc,'section');node.style.cssText='border: 1px solid GrayText; border-radius: 6px; padding: 7px; margin: 6px 0;';
     const title=html(doc,'div',saved.title+' · PDF 第 '+(saved.position.pageIndex+1)+' 页');title.style.cssText='overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';title.title=title.textContent;
@@ -137,18 +138,26 @@ var ZEPins = {
      Object.assign(overlay.style,{left:frameBox.left+'px',top:frameBox.top+'px',width:frameBox.width+'px',height:frameBox.height+'px'});
      const hint=html(doc,'div','拖动框选公式或定义 · Esc 取消');hint.style.cssText='position: absolute; top: 8px; left: 12px; background: Canvas; color: CanvasText; padding: 7px; border: 1px solid GrayText; pointer-events: none;';
      const selection=html(doc,'div');selection.style.cssText='position: fixed; border: 2px solid #008b8b; background: rgba(0,139,139,.12); pointer-events: none; display: none;';overlay.append(hint,selection);(doc.body||doc.documentElement).appendChild(overlay);removers.push(()=>overlay.remove());
-     const boxFor=page=>{const element=page.canvas||page.div?.querySelector?.('.canvasWrapper')||page.div;return element?.getBoundingClientRect();};
+     // PDF.js assigns canvas before inserting it, and swaps it during rendering.
+     // Its stable page wrapper remains usable while that canvas has no layout box.
+     const boxFor=page=>{
+      for(const element of [page.div?.querySelector?.('.canvasWrapper'),page.canvas,page.div]){
+       const box=element?.getBoundingClientRect();if(box?.width>0&&box.height>0)return box;
+      }
+     };
+     const drawSelection=(start,end)=>{selection.style.display='block';Object.assign(selection.style,{left:Math.min(start.x,end.x)+'px',top:Math.min(start.y,end.y)+'px',width:Math.abs(end.x-start.x)+'px',height:Math.abs(end.y-start.y)+'px'});};
      listen(overlay,'pointerdown',e=>{
       stop(e);if(e.button!==0)return;
       const start=point(e);
       for(let i=0;i<app.pdfViewer.pagesCount;i++){
        const page=app.pdfViewer.getPageView(i),box=page&&boxFor(page);
-       if(box?.width>0&&box.height>0&&start.x>=box.left&&start.x<=box.left+box.width&&start.y>=box.top&&start.y<=box.top+box.height){
-        gesture={page,box,start,outerStart:{x:e.clientX,y:e.clientY},pointerId:e.pointerId,view,overlay,selection,viewport:page.viewport};overlay.setPointerCapture?.(e.pointerId);break;
+       if(page?.pdfPage&&page.viewport&&box?.width>0&&box.height>0&&start.x>=box.left&&start.x<=box.left+box.width&&start.y>=box.top&&start.y<=box.top+box.height){
+        gesture={page,box,start,outerStart:{x:e.clientX,y:e.clientY},pointerId:e.pointerId,view,overlay,selection,viewport:page.viewport};drawSelection(gesture.outerStart,gesture.outerStart);overlay.setPointerCapture?.(e.pointerId);break;
        }
       }
+      if(!gesture)hint.textContent='请在已加载的 PDF 页面内框选 · Esc 取消';
      });
-     listen(overlay,'pointermove',e=>{stop(e);if(!gesture||gesture.overlay!==overlay||e.pointerId!==gesture.pointerId)return;selection.style.display='block';Object.assign(selection.style,{left:Math.min(gesture.outerStart.x,e.clientX)+'px',top:Math.min(gesture.outerStart.y,e.clientY)+'px',width:Math.abs(e.clientX-gesture.outerStart.x)+'px',height:Math.abs(e.clientY-gesture.outerStart.y)+'px'});});
+     listen(overlay,'pointermove',e=>{stop(e);if(!gesture||gesture.overlay!==overlay||e.pointerId!==gesture.pointerId)return;drawSelection(gesture.outerStart,{x:e.clientX,y:e.clientY});});
      listen(overlay,'pointerup',e=>{
       stop(e);const g=gesture;if(!g||g.overlay!==overlay||g.pointerId!==e.pointerId)return;
       try{

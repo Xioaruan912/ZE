@@ -1,4 +1,11 @@
-# ZE Reader 0.5.1 验证记录
+# ZE Reader 0.5.2 验证记录
+
+## 0.5.2 页面渲染与间歇性框选修复
+
+- 用户截图报 `page.getViewport is not a function`。异步取得页面后显式调用 `Cu.waiveXrays`，再读取 PDFPageProxy 的方法；桥接经 bootstrap、runtime、pins 完整传递，原有传给内容区的 cloneInto 选项保持保留。依据 [Mozilla Xray 对象语义](https://firefox-source-docs.mozilla.org/dom/scriptSecurity/xray_vision.html#xray-semantics-for-object-and-array) 核对过滤后的对象原型与方法不可见问题。
+- 对照本机 `resource/reader/pdf/web/viewer.mjs` 的 `_createCanvas`：先赋值 this.canvas，稍后 onShow 才将其插入 DOM，渲染时也会换画布。旧命中检测因此可能读到零面积。改为优先稳定 `.canvasWrapper`，再逐一检查 canvas/页面的有效布局区域；按下立即初始化矩形反馈。
+- 两项新增回归在旧代码上失败，分别重现截图中的 getViewport 报错及未挂载画布无法画框。修复后通过；覆盖渲染中替换 canvas 不改变框选坐标。安装包测试另验证原生解包/参数克隆桥接，运行时测试验证桥接传递。
+- 完整回归：160 项 Node、72 项 Python 测试通过。独立源码复核无 Important 阻塞；未使用 computer use，尚未验证真实界面中的间歇性现象。
 
 ## 0.5.1 原生入口修复
 

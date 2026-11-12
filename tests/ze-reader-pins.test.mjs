@@ -60,6 +60,14 @@ test('content PDF.js receives cloned options and arrays while its own viewport i
  await pins.renderRegion({...env,document:env.doc,position:{pageIndex:2,rects:[[1,2,30,40]]},request:{},cloneInto});assert.equal(calls,3);
 });
 
+test('an awaited PDF page is unwrapped before invoking its prototype methods',async()=>{
+ const pins=api(),env=renderEnv(),wrapped={};let unwrapped=false;
+ env.app.pdfDocument.getPage=async()=>wrapped;
+ const unwrap=value=>{if(value===wrapped){unwrapped=true;return env.page;}return value;};
+ const result=await pins.renderRegion({...env,document:env.doc,position:{pageIndex:2,rects:[[1,2,30,40]]},request:{},unwrap});
+ assert.ok(unwrapped);assert.ok(result.startsWith('data:image/png;'));assert.equal(env.calls.length,1);
+});
+
 function managerEnv(renderer){
  const host=windowDOM(),frame=windowDOM(),pdf=windowDOM(),listeners=new Map(),opened=[],errors=[];
  host.win.innerWidth=1200;host.win.innerHeight=850;host.win.screen={availWidth:1400,availHeight:1000};
@@ -152,6 +160,22 @@ test('iframe offset and CSS scale map to the correct inner PDF region; moving th
  await env.host.root.querySelectorAll('button').find(x=>x.textContent==='框选').fire('click');overlay=env.frame.root.querySelector('[data-ze-pin-overlay]');
  await overlay.fire('pointerdown',{button:0,pointerId:1,clientX:70,clientY:100});box={...box,left:100};await overlay.fire('pointerup',{pointerId:1,clientX:145,clientY:175});
  assert.equal(positions.length,1);assert.match(env.host.root.textContent,/页面位置已变化/);env.manager.dispose();
+});
+
+test('a pending or replaced PDF canvas does not prevent a visible drag rectangle or change its page coordinates',async()=>{
+ const regions=[],env=managerEnv(async args=>{regions.push(args.position);return 'data:image/png;base64,image';});
+ const page=env.pdf.win.PDFViewerApplication.pdfViewer.getPageView(2),wrapper=new Node();
+ wrapper.getBoundingClientRect=()=>({left:30,top:40,width:600,height:800});
+ page.div.querySelector=selector=>selector==='.canvasWrapper'?wrapper:null;
+ page.canvas=new Node('canvas');page.canvas.getBoundingClientRect=()=>({left:0,top:0,width:0,height:0});
+ env.manager.start();await env.fire('renderToolbar')[0].fire('click');const overlay=env.frame.root.querySelector('[data-ze-pin-overlay]');
+ await overlay.fire('pointerdown',{button:0,pointerId:1,clientX:130,clientY:140});
+ const selection=overlay.children[1];assert.equal(selection.style.display,'block','feedback must begin at pointerdown');
+ await overlay.fire('pointermove',{pointerId:1,clientX:280,clientY:290});
+ assert.equal(selection.style.left,'130px');assert.equal(selection.style.top,'140px');assert.equal(selection.style.width,'150px');assert.equal(selection.style.height,'150px');
+ page.canvas=new Node('canvas');page.canvas.getBoundingClientRect=()=>({left:30,top:40,width:600,height:800});
+ await overlay.fire('pointerup',{pointerId:1,clientX:280,clientY:290});await settle();
+ assert.equal(regions.length,1);assert.deepEqual(Array.from(regions[0].rects[0]),[100,550,250,700]);env.manager.dispose();
 });
 
 test('card drag moves its native popup, folding changes actual display, and current PDF is used after a tab switch',async()=>{

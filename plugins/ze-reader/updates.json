@@ -3,9 +3,9 @@
     "reading-route-columns@local.example": {
       "updates": [
         {
-          "version": "0.5.1",
-          "update_link": "https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v0.5.1/ze-reader.xpi",
-          "update_hash": "sha256:d8a77af0658b3dd4ddcc58fa04f0dbb116cb234624531989a61aa205b59c8761",
+          "version": "0.5.2",
+          "update_link": "https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v0.5.2/ze-reader.xpi",
+          "update_hash": "sha256:c2d9ef2ad4b06a855b8f30684be86132aca7da31b9e8729e90f5c10aad20d3b5",
           "applications": {
             "zotero": {
               "strict_min_version": "10.0",
