@@ -2,7 +2,7 @@
 
 ## ZE Reader 桌面插件
 
-[ZE Reader 安装与使用](plugins/ze-reader/README.md) 0.6.0 新增临时固定公式/定义与跨路线跳转。提供已读、阅读顺序与分支定位三列；路线列默认只读，一个全局编辑按钮控制输入，阅读顺序默认降序。保留鼠标悬停 PDF 预览、滚轮翻页、内部标签精简、图标及 Zotero 原生自动更新；[下载安装包](https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v0.6.0/ze-reader.xpi)。工作台与翻译桥接保持移除。面向 Zotero 10.0.x；运行 `npm.cmd run build:plugin` 生成安装包及更新清单。下方介绍的是另行运行的 ZE 网页阅读器。
+[ZE Reader 安装与使用](plugins/ze-reader/README.md) 0.6.1 新增临时固定公式/定义与跨路线跳转。提供已读、阅读顺序与分支定位三列；路线列默认只读，一个全局编辑按钮控制输入，阅读顺序默认降序。保留鼠标悬停 PDF 预览、滚轮翻页、内部标签精简、图标及 Zotero 原生自动更新；[下载安装包](https://github.com/Xioaruan912/ZE/releases/download/ze-reader-v0.6.1/ze-reader.xpi)。工作台与翻译桥接保持移除。面向 Zotero 10.0.x；运行 `npm.cmd run build:plugin` 生成安装包及更新清单。下方介绍的是另行运行的 ZE 网页阅读器。
 
 在浏览器里阅读自己的 Zotero 论文，支持电脑、iPad 和手机。
 

@@ -71,29 +71,33 @@ var ZEPins = {
    win.addEventListener('unload',unload);win.addEventListener('resize',resize);layer.appendChild(status);doc.documentElement.appendChild(layer);state.message('');sessions.set(win,state);return state;
   }
   function floatingImage(state,saved,data){
-   const {win,layer}=state,doc=win.document,node=html(doc,'div'),image=html(doc,'img'),actions=html(doc,'div'),removers=[];
+   const {win,layer}=state,doc=win.document,node=html(doc,'div'),image=html(doc,'img'),actions=html(doc,'div'),handle=html(doc,'button','↘'),removers=[];
    node.setAttribute('data-ze-pin-image','true');node.tabIndex=0;
-   node.title=saved.title+' · PDF 第 '+(saved.position.pageIndex+1)+' 页；拖动移动，滚轮缩放';
-   node.style.cssText='position: absolute; pointer-events: auto; touch-action: none; user-select: none; line-height: 0; padding: 0; border: 0;';
-   image.alt='固定的 PDF 原文区域';image.draggable=false;image.style.cssText='display: block; width: 100%; height: auto; margin: 0; cursor: move;';
+   node.title=saved.title+' · PDF 第 '+(saved.position.pageIndex+1)+' 页；拖动移动，滚轮或右下角等比例缩放';
+   node.style.cssText='position: absolute; pointer-events: auto; touch-action: none; user-select: none; line-height: 0; padding: 0; border: 1px solid GrayText; box-sizing: content-box;';
+   image.alt='固定的 PDF 原文区域';image.draggable=false;image.style.cssText='display: block; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; margin: 0; cursor: move;';
+   handle.type='button';handle.setAttribute('data-ze-pin-resize','true');handle.setAttribute('aria-label','等比例缩放');handle.title='拖动等比例缩放，方向键微调';
+   handle.style.cssText='position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; padding: 0; border: 0; background: Canvas; color: CanvasText; font: 12px system-ui; line-height: 14px; cursor: nwse-resize; touch-action: none;';handle.style.opacity='0.65';
    actions.setAttribute('data-ze-pin-actions','true');actions.style.cssText='position: absolute; top: 4px; right: 4px; display: flex; gap: 4px; background: Canvas; color: CanvasText; font: 12px system-ui; padding: 3px;';actions.style.opacity='0';
    const rect=saved.position.rects[0];let ratio=(rect[3]-rect[1])/(rect[2]-rect[0]),drag=null;
    const size=()=>({width:Math.max(1,win.innerWidth||1200),height:Math.max(1,win.innerHeight||850)});
    const item={node,image,saved,width:Math.min(360,Math.max(80,(rect[2]-rect[0]))),left:Math.max(0,size().width-400-state.items.length*24),top:100+state.items.length*32,disposed:false,
-    fit(width){const b=size(),maxWidth=Math.max(1,Math.min(b.width-16,(b.height-16)/ratio));item.width=Math.min(maxWidth,Math.max(Math.min(80,maxWidth),width));item.left=Math.max(0,Math.min(b.width-item.width,item.left));item.top=Math.max(0,Math.min(b.height-item.width*ratio,item.top));Object.assign(node.style,{left:item.left+'px',top:item.top+'px',width:item.width+'px'});},
+    fit(width){const b=size(),maxWidth=Math.max(1,Math.min(b.width-16,(b.height-16)/ratio));item.width=Math.min(maxWidth,Math.max(Math.min(32,maxWidth),width));item.left=Math.max(0,Math.min(b.width-item.width-2,item.left));item.top=Math.max(0,Math.min(b.height-item.width*ratio-2,item.top));Object.assign(node.style,{left:item.left+'px',top:item.top+'px',width:item.width+'px',height:item.width*ratio+'px'});},
     dispose(){if(item.disposed)return;item.disposed=true;drag=null;for(const remove of removers)remove();image.src='';node.remove();state.items=state.items.filter(x=>x!==item);}
    };
    const on=(target,type,fn,options)=>{target.addEventListener(type,fn,options);removers.push(()=>target.removeEventListener(type,fn,options));};
-   const controls=visible=>{actions.style.opacity=visible?'1':'0';};
+   const controls=visible=>{actions.style.opacity=visible?'1':'0';handle.style.opacity=visible?'1':'0.65';};
    on(node,'pointerenter',()=>controls(true));on(node,'pointerleave',()=>{if(!drag)controls(false);});on(node,'focusin',()=>controls(true));on(node,'focusout',event=>{if(!node.contains(event.relatedTarget))controls(false);});
    on(image,'load',()=>{if(item.disposed)return;if(image.naturalWidth>0&&image.naturalHeight>0){ratio=image.naturalHeight/image.naturalWidth;item.fit(item.width);}});
    on(image,'pointerdown',event=>{if(event.button!==0)return;event.preventDefault();event.stopPropagation();node.style.zIndex=String(++state.front);drag={id:event.pointerId,x:event.clientX,y:event.clientY,left:item.left,top:item.top};image.setPointerCapture?.(event.pointerId);});
-   on(win,'pointermove',event=>{if(!drag||event.pointerId!==drag.id)return;event.preventDefault();item.left=drag.left+event.clientX-drag.x;item.top=drag.top+event.clientY-drag.y;item.fit(item.width);},true);
+   on(handle,'pointerdown',event=>{if(event.button!==0)return;event.preventDefault();event.stopPropagation();node.style.zIndex=String(++state.front);drag={kind:'resize',id:event.pointerId,x:event.clientX,y:event.clientY,width:item.width,ratio};handle.setPointerCapture?.(event.pointerId);});
+   on(win,'pointermove',event=>{if(!drag||event.pointerId!==drag.id)return;event.preventDefault();const dx=event.clientX-drag.x,dy=event.clientY-drag.y;if(drag.kind==='resize')item.fit(drag.width+(dx+dy*drag.ratio)/(1+drag.ratio*drag.ratio));else{item.left=drag.left+dx;item.top=drag.top+dy;item.fit(item.width);}},true);
    const up=event=>{if(drag&&(event.type==='blur'||event.pointerId===undefined||event.pointerId===drag.id))drag=null;};
-   on(win,'pointerup',up,true);on(win,'pointercancel',up,true);on(win,'blur',()=>{drag=null;});on(image,'lostpointercapture',()=>{drag=null;});
-   on(image,'wheel',event=>{event.preventDefault();event.stopPropagation();if(!event.deltaY||Math.abs(event.deltaX||0)>Math.abs(event.deltaY))return;const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?size().height:1);item.fit(item.width*Math.exp(Math.max(-0.25,Math.min(0.25,-delta*0.002))));},{passive:false});
+   on(win,'pointerup',up,true);on(win,'pointercancel',up,true);on(win,'blur',()=>{drag=null;});on(image,'lostpointercapture',()=>{drag=null;});on(handle,'lostpointercapture',()=>{drag=null;});
+   on(node,'wheel',event=>{event.preventDefault();event.stopPropagation();if(drag||!event.deltaY||Math.abs(event.deltaX||0)>Math.abs(event.deltaY))return;const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?size().height:1);item.fit(item.width*Math.exp(Math.max(-0.25,Math.min(0.25,-delta*0.002))));},{passive:false,capture:true});
+   on(handle,'keydown',event=>{if(!['ArrowUp','ArrowRight','ArrowDown','ArrowLeft'].includes(event.key))return;event.preventDefault();event.stopPropagation();item.fit(item.width*(['ArrowUp','ArrowRight'].includes(event.key)?1.1:1/1.1));});
    actions.append(button(doc,'返回原文',async()=>{try{const source=await Zotero.Items.getAsync(saved.itemID);if(disposed||state.disposed||item.disposed)return;if(!source||source.deleted||source.key!==saved.key||source.libraryID!==saved.libraryID||source.attachmentContentType!=='application/pdf'||!await source.fileExists())throw Error('原 PDF 附件不可用');if(disposed||state.disposed||item.disposed)return;await Zotero.Reader.open(saved.itemID,{pageIndex:saved.position.pageIndex,position:saved.position},{allowDuplicate:false});}catch(error){if(!disposed&&!state.disposed&&!item.disposed){report(error);state.message('原 PDF 附件不可用，无法返回。');}}}),button(doc,'关闭',()=>item.dispose()));
-   node.style.zIndex=String(++state.front);node.append(image,actions);layer.appendChild(node);state.items.push(item);item.fit(item.width);image.src=data;return item;
+   node.style.zIndex=String(++state.front);node.append(image,actions,handle);layer.appendChild(node);state.items.push(item);item.fit(item.width);image.src=data;return item;
   }
   async function pin(reader,position,view){
    if(disposed||reader._isUninitialized)return;

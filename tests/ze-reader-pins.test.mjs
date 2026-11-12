@@ -107,7 +107,7 @@ test('each bare image moves and zooms independently, and hover controls do not o
  await image.fire('pointerdown',{button:0,pointerId:8,clientX:before.x+10,clientY:before.y+10});
  await env.host.win.fire('pointermove',{pointerId:8,clientX:before.x-10,clientY:before.y+30});await env.host.win.fire('pointerup',{pointerId:8});
  assert.equal(parseFloat(first.style.left),before.x-20);assert.equal(parseFloat(first.style.top),before.y+20);
- await image.fire('wheel',{deltaY:-80,deltaX:0,deltaMode:0});assert.ok(parseFloat(first.style.width)>before.width);
+ await first.fire('wheel',{deltaY:-80,deltaX:0,deltaMode:0});assert.ok(parseFloat(first.style.width)>before.width);
  assert.deepEqual(second.style,secondBefore);env.manager.dispose();assert.equal(env.host.root.querySelector('[data-ze-pin-layer]'),null);
 });
 
@@ -255,6 +255,33 @@ test('image aspect ratio follows decoded PNG dimensions and window resizing keep
  env.host.win.innerWidth=180;env.host.win.innerHeight=240;await env.host.win.fire('resize');
  const width=parseFloat(node.style.width);assert.ok(width*3<=240);assert.ok(parseFloat(node.style.left)+width<=180);assert.ok(parseFloat(node.style.top)+width*3<=240);
  await env.host.win.fire('unload');assert.equal(env.host.root.querySelector('[data-ze-pin-layer]'),null);env.manager.dispose();
+});
+
+test('a small visible border separates images and the corner handle resizes width and height at one ratio',async()=>{
+ const env=managerEnv();env.manager.start();await captureOnce(env,env.fire('renderToolbar')[0]);
+ const node=env.host.root.querySelector('[data-ze-pin-image]'),image=node.querySelector('img');image.naturalWidth=400;image.naturalHeight=200;await image.fire('load');
+ assert.match(node.style.cssText,/border:\s*1px solid/);
+ const handle=node.querySelector('[data-ze-pin-resize]');assert.ok(handle,'a discoverable resize handle is required');
+ const width=parseFloat(node.style.width),left=parseFloat(node.style.left),top=parseFloat(node.style.top);
+ await handle.fire('pointerdown',{button:0,pointerId:4,clientX:left+width,clientY:top+width/2});
+ await env.host.win.fire('pointermove',{pointerId:4,clientX:left+width+80,clientY:top+width/2+40});await env.host.win.fire('pointerup',{pointerId:4});
+ assert.ok(parseFloat(node.style.width)>width);assert.equal(parseFloat(node.style.height)/parseFloat(node.style.width),0.5);
+ const larger=parseFloat(node.style.width);await node.fire('wheel',{deltaY:100,deltaMode:0,deltaX:0});
+ assert.ok(parseFloat(node.style.width)<larger,'wheel on the whole frame must resize');assert.equal(parseFloat(node.style.height)/parseFloat(node.style.width),0.5);
+ assert.equal(parseFloat(node.style.left),left);assert.equal(parseFloat(node.style.top),top);env.manager.dispose();
+});
+
+test('corner shrinking and cancelled drags preserve portrait and landscape image proportions',async()=>{
+ for(const ratio of [0.25,3]){
+  const env=managerEnv();env.manager.start();await captureOnce(env,env.fire('renderToolbar')[0]);
+  const node=env.host.root.querySelector('[data-ze-pin-image]'),image=node.querySelector('img'),handle=node.querySelector('[data-ze-pin-resize]');image.naturalWidth=400;image.naturalHeight=400*ratio;await image.fire('load');
+  const width=parseFloat(node.style.width);await handle.fire('pointerdown',{button:0,pointerId:2,clientX:400,clientY:400});
+  await env.host.win.fire('pointermove',{pointerId:2,clientX:360,clientY:400-40*ratio});await env.host.win.fire('pointercancel',{pointerId:2});
+  const smaller=parseFloat(node.style.width);assert.ok(smaller<width);assert.ok(Math.abs(parseFloat(node.style.height)/smaller-ratio)<1e-10);
+  await env.host.win.fire('pointermove',{pointerId:2,clientX:700,clientY:700});assert.equal(parseFloat(node.style.width),smaller);
+  for(let i=0;i<15;i++)await node.fire('wheel',{deltaY:3,deltaMode:1,deltaX:0});assert.ok(parseFloat(node.style.width)<80,'small formulas can shrink below the former 80px floor');
+  await handle.fire('keydown',{key:'ArrowRight'});assert.ok(Math.abs(parseFloat(node.style.height)/parseFloat(node.style.width)-ratio)<1e-10);env.manager.dispose();
+ }
 });
 
 test('closing one image while source I/O is pending cancels its late navigation',async()=>{
