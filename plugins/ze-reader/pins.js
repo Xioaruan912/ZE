@@ -48,7 +48,7 @@ var ZEPins = {
  },
  create({Zotero,id,renderRegion=ZEPins.renderRegion,cloneInto,unwrap}){
   let started=false,disposed=false,capture=null;
-  const boards=new Map(),documents=new Map();
+  const sessions=new Map(),documents=new Map();
   const html=(doc,name,text)=>{const node=doc.createElementNS('http://www.w3.org/1999/xhtml',name);if(text!==undefined)node.textContent=text;return node;};
   const report=error=>Zotero.logError?.(error);
   function button(doc,label,action){
@@ -56,41 +56,50 @@ var ZEPins = {
    node.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();return action();});return node;
   }
   function owner(reader){return reader._window||reader._iframe?.ownerGlobal||Zotero.getMainWindow();}
-  function activeReader(state){
-   const tabs=state.win.Zotero_Tabs;
-   const reader=tabs?Zotero.Reader.getByTabID?.(tabs.selectedID):state.currentReader;
-   if(!reader||reader._isUninitialized||reader._isTabClosed){state.message('请先打开要框选的 PDF。');return null;}return reader;
-  }
-  function boardFor(win){
-   if(boards.has(win))return boards.get(win);
-   const doc=win.document;if(!doc?.createXULElement)throw Error('当前窗口不支持临时固定面板');
-   const panel=doc.createXULElement('panel');
-   for(const [k,v] of Object.entries({noautofocus:'true',noautohide:'true',consumeoutsideclicks:'false'}))panel.setAttribute(k,v);
-   const box=html(doc,'div');box.style.cssText='background: Canvas; color: CanvasText; font: 12px system-ui; padding: 10px; box-sizing: border-box; resize: both; overflow: auto; width: 360px; height: 420px; min-width: 220px; min-height: 120px;';
-   box.style.maxWidth=Math.max(220,(win.screen?.availWidth||1200)-40)+'px';box.style.maxHeight=Math.max(120,(win.screen?.availHeight||900)-80)+'px';
-   const header=html(doc,'div');header.style.cssText='display: flex; align-items: center; gap: 6px;';
-   const title=html(doc,'strong','临时固定');title.style.cssText='flex: 1; cursor: move; user-select: none;';title.title='拖动移动；右下角调整大小';
-   const status=html(doc,'div','框选公式或定义；最多保留 3 块，重启清空。');status.setAttribute('role','status');status.style.cssText='padding: 8px 0;';
-   const content=html(doc,'div');let visible=false,drag=null,left=0,top=0;
-   const state={win,panel,status,content,items:[],pending:new Set(),disposed:false,currentReader:null,
-    show(){if(state.disposed)return;if(!visible){const screen=win.screen||{},x=(win.screenX||0)+(win.innerWidth||1200)-400,y=(win.screenY||0)+110;left=Math.max(screen.availLeft||0,Math.min(x,(screen.availLeft||0)+(screen.availWidth||1400)-380));top=Math.max(screen.availTop||0,y);panel.openPopupAtScreen(left,top,false);visible=true;}},
-    message(text){status.textContent=text;state.show();},
-    clear(){for(const token of state.pending){token.cancelled=true;token.cancel?.();}state.pending.clear();for(const item of state.items){item.image.src='';item.node.remove();}state.items=[];status.textContent='已清空；最多保留 3 块。';},
-    dispose(){if(state.disposed)return;state.disposed=true;state.clear();if(capture?.win===win)cancelCapture();panel.hidePopup();panel.remove();win.removeEventListener('unload',unload);title.removeEventListener('pointerdown',down);win.removeEventListener('pointermove',move,true);win.removeEventListener('pointerup',up,true);win.removeEventListener('pointercancel',up,true);win.removeEventListener('blur',up);boards.delete(win);}
+  function sessionFor(win){
+   if(sessions.has(win))return sessions.get(win);
+   const doc=win.document;if(!doc?.createElementNS)throw Error('当前窗口不能显示临时贴图');
+   const layer=html(doc,'div');layer.setAttribute('data-ze-pin-layer','true');
+   layer.style.cssText='position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; overflow: hidden;';layer.style.visibility='visible';
+   const status=html(doc,'div');status.setAttribute('role','status');status.style.cssText='position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); padding: 8px 12px; background: Canvas; color: CanvasText; font: 12px system-ui; pointer-events: none;';
+   const state={win,layer,status,items:[],pending:new Set(),disposed:false,front:0,
+    message(text){status.textContent=text;status.style.display=text?'block':'none';},
+    clear(){for(const token of state.pending){token.cancelled=true;token.cancel?.();}state.pending.clear();for(const item of [...state.items])item.dispose();state.message('');},
+    dispose(){if(state.disposed)return;state.disposed=true;state.clear();if(capture?.win===win)cancelCapture();layer.remove();win.removeEventListener('unload',unload);win.removeEventListener('resize',resize);sessions.delete(win);}
    };
-   const move=e=>{if(!drag)return;const s=win.screen||{};left=Math.min((s.availLeft||0)+(s.availWidth||1400)-220,Math.max(s.availLeft||0,drag.left+e.screenX-drag.x));top=Math.min((s.availTop||0)+(s.availHeight||900)-60,Math.max(s.availTop||0,drag.top+e.screenY-drag.y));panel.moveTo?.(left,top);e.preventDefault();};
-   const up=()=>{drag=null;};
-   const down=e=>{if(e.button!==0)return;drag={x:e.screenX,y:e.screenY,left,top};title.setPointerCapture?.(e.pointerId);e.preventDefault();};
-   const unload=()=>state.dispose();
-   title.addEventListener('pointerdown',down);win.addEventListener('pointermove',move,true);win.addEventListener('pointerup',up,true);win.addEventListener('pointercancel',up,true);win.addEventListener('blur',up);win.addEventListener('unload',unload);
-   header.append(title,button(doc,'框选',()=>{const reader=activeReader(state);if(reader)beginCapture(reader);}),button(doc,'清空',()=>state.clear()),button(doc,'收起',()=>{panel.hidePopup();visible=false;}));
-   box.append(header,status,content);panel.appendChild(box);(doc.getElementById?.('mainPopupSet')||doc.documentElement).appendChild(panel);boards.set(win,state);return state;
+   const unload=()=>state.dispose(),resize=()=>{for(const item of state.items)item.fit(item.width);};
+   win.addEventListener('unload',unload);win.addEventListener('resize',resize);layer.appendChild(status);doc.documentElement.appendChild(layer);state.message('');sessions.set(win,state);return state;
+  }
+  function floatingImage(state,saved,data){
+   const {win,layer}=state,doc=win.document,node=html(doc,'div'),image=html(doc,'img'),actions=html(doc,'div'),removers=[];
+   node.setAttribute('data-ze-pin-image','true');node.tabIndex=0;
+   node.title=saved.title+' · PDF 第 '+(saved.position.pageIndex+1)+' 页；拖动移动，滚轮缩放';
+   node.style.cssText='position: absolute; pointer-events: auto; touch-action: none; user-select: none; line-height: 0; padding: 0; border: 0;';
+   image.alt='固定的 PDF 原文区域';image.draggable=false;image.style.cssText='display: block; width: 100%; height: auto; margin: 0; cursor: move;';
+   actions.setAttribute('data-ze-pin-actions','true');actions.style.cssText='position: absolute; top: 4px; right: 4px; display: flex; gap: 4px; background: Canvas; color: CanvasText; font: 12px system-ui; padding: 3px;';actions.style.opacity='0';
+   const rect=saved.position.rects[0];let ratio=(rect[3]-rect[1])/(rect[2]-rect[0]),drag=null;
+   const size=()=>({width:Math.max(1,win.innerWidth||1200),height:Math.max(1,win.innerHeight||850)});
+   const item={node,image,saved,width:Math.min(360,Math.max(80,(rect[2]-rect[0]))),left:Math.max(0,size().width-400-state.items.length*24),top:100+state.items.length*32,disposed:false,
+    fit(width){const b=size(),maxWidth=Math.max(1,Math.min(b.width-16,(b.height-16)/ratio));item.width=Math.min(maxWidth,Math.max(Math.min(80,maxWidth),width));item.left=Math.max(0,Math.min(b.width-item.width,item.left));item.top=Math.max(0,Math.min(b.height-item.width*ratio,item.top));Object.assign(node.style,{left:item.left+'px',top:item.top+'px',width:item.width+'px'});},
+    dispose(){if(item.disposed)return;item.disposed=true;drag=null;for(const remove of removers)remove();image.src='';node.remove();state.items=state.items.filter(x=>x!==item);}
+   };
+   const on=(target,type,fn,options)=>{target.addEventListener(type,fn,options);removers.push(()=>target.removeEventListener(type,fn,options));};
+   const controls=visible=>{actions.style.opacity=visible?'1':'0';};
+   on(node,'pointerenter',()=>controls(true));on(node,'pointerleave',()=>{if(!drag)controls(false);});on(node,'focusin',()=>controls(true));on(node,'focusout',event=>{if(!node.contains(event.relatedTarget))controls(false);});
+   on(image,'load',()=>{if(item.disposed)return;if(image.naturalWidth>0&&image.naturalHeight>0){ratio=image.naturalHeight/image.naturalWidth;item.fit(item.width);}});
+   on(image,'pointerdown',event=>{if(event.button!==0)return;event.preventDefault();event.stopPropagation();node.style.zIndex=String(++state.front);drag={id:event.pointerId,x:event.clientX,y:event.clientY,left:item.left,top:item.top};image.setPointerCapture?.(event.pointerId);});
+   on(win,'pointermove',event=>{if(!drag||event.pointerId!==drag.id)return;event.preventDefault();item.left=drag.left+event.clientX-drag.x;item.top=drag.top+event.clientY-drag.y;item.fit(item.width);},true);
+   const up=event=>{if(drag&&(event.type==='blur'||event.pointerId===undefined||event.pointerId===drag.id))drag=null;};
+   on(win,'pointerup',up,true);on(win,'pointercancel',up,true);on(win,'blur',()=>{drag=null;});on(image,'lostpointercapture',()=>{drag=null;});
+   on(image,'wheel',event=>{event.preventDefault();event.stopPropagation();if(!event.deltaY||Math.abs(event.deltaX||0)>Math.abs(event.deltaY))return;const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?size().height:1);item.fit(item.width*Math.exp(Math.max(-0.25,Math.min(0.25,-delta*0.002))));},{passive:false});
+   actions.append(button(doc,'返回原文',async()=>{try{const source=await Zotero.Items.getAsync(saved.itemID);if(disposed||state.disposed||item.disposed)return;if(!source||source.deleted||source.key!==saved.key||source.libraryID!==saved.libraryID||source.attachmentContentType!=='application/pdf'||!await source.fileExists())throw Error('原 PDF 附件不可用');if(disposed||state.disposed||item.disposed)return;await Zotero.Reader.open(saved.itemID,{pageIndex:saved.position.pageIndex,position:saved.position},{allowDuplicate:false});}catch(error){if(!disposed&&!state.disposed&&!item.disposed){report(error);state.message('原 PDF 附件不可用，无法返回。');}}}),button(doc,'关闭',()=>item.dispose()));
+   node.style.zIndex=String(++state.front);node.append(image,actions);layer.appendChild(node);state.items.push(item);item.fit(item.width);image.src=data;return item;
   }
   async function pin(reader,position,view){
    if(disposed||reader._isUninitialized)return;
    let state,token;
    try{
-    state=boardFor(owner(reader));state.currentReader=reader;
+    state=sessionFor(owner(reader));
     if(state.items.length+state.pending.size>=3){state.message('最多固定 3 块，请先关闭一块或清空。');return;}
     const source=Zotero.Items.get(reader.itemID);
     if(!source?.isAttachment?.()||source.deleted||source.attachmentContentType!=='application/pdf')throw Error('原 PDF 附件不可用');
@@ -100,14 +109,7 @@ var ZEPins = {
     token={cancelled:false,cancel:null,reader};state.pending.add(token);state.message('正在固定选区…');
     const data=await renderRegion({app:target.app,document:target.doc,position:saved.position,request:token,cloneInto,unwrap});
     if(disposed||state.disposed||token.cancelled)return;
-    const doc=state.win.document,node=html(doc,'section');node.style.cssText='border: 1px solid GrayText; border-radius: 6px; padding: 7px; margin: 6px 0;';
-    const title=html(doc,'div',saved.title+' · PDF 第 '+(saved.position.pageIndex+1)+' 页');title.style.cssText='overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';title.title=title.textContent;
-    const image=html(doc,'img');image.src=data;image.alt='固定的 PDF 原文区域';image.style.cssText='display: block; width: 100%; height: auto; margin-top: 6px;';
-    const actions=html(doc,'div');actions.style.cssText='display: flex; gap: 6px; margin-top: 6px;';
-    const collapse=button(doc,'折叠',()=>{image.hidden=!image.hidden;image.style.display=image.hidden?'none':'block';collapse.textContent=image.hidden?'展开':'折叠';});
-    const item={node,image,saved};
-    actions.append(button(doc,'返回原文',async()=>{try{const source=await Zotero.Items.getAsync(saved.itemID);if(disposed||state.disposed)return;if(!source||source.deleted||source.key!==saved.key||source.libraryID!==saved.libraryID||source.attachmentContentType!=='application/pdf'||!await source.fileExists())throw Error('原 PDF 附件不可用');if(disposed||state.disposed)return;await Zotero.Reader.open(saved.itemID,{pageIndex:saved.position.pageIndex,position:saved.position},{allowDuplicate:false});}catch(error){if(!disposed&&!state.disposed){report(error);state.message('原 PDF 附件不可用，无法返回。');}}}),collapse,button(doc,'关闭',()=>{state.items=state.items.filter(x=>x!==item);image.src='';node.remove();state.message('已关闭固定内容。');}));
-    node.append(title,actions,image);state.content.appendChild(node);state.items.push(item);state.message('已固定 '+state.items.length+' / 3；拖动标题移动，右下角调整大小。');
+    floatingImage(state,saved,data);state.message('');
    }catch(error){if(!token?.cancelled&&!state?.disposed&&!disposed){report(error);state?.message('固定失败：'+String(error.message||error));}}
    finally{if(token)state?.pending.delete(token);}
   }
@@ -117,7 +119,7 @@ var ZEPins = {
    if(capture?.reader===reader){cancelCapture();return;}cancelCapture();
    let state;
    try{
-    state=boardFor(owner(reader));state.currentReader=reader;
+    state=sessionFor(owner(reader));
     if(state.items.length+state.pending.size>=3){state.message('最多固定 3 块，请先关闭一块。');return;}
     const views=ZEPins.views(reader).filter(view=>view.frame?.getBoundingClientRect);
     if(!views.length){state.message('请切回 PDF 原始版式；当前阅读器不能框选。');return;}
@@ -125,7 +127,8 @@ var ZEPins = {
     const listen=(target,type,fn,options)=>{target.addEventListener(type,fn,options);removers.push(()=>target.removeEventListener(type,fn,options));};
     const stop=e=>{e.preventDefault();e.stopPropagation();};
     const key=e=>{if(e.key==='Escape'){stop(e);cancelCapture();}};
-    const active={reader,win:state.win,cleanup(){for(const remove of removers)remove();gesture=null;}};capture=active;
+    state.message('');state.layer.style.visibility='hidden';
+    const active={reader,win:state.win,cleanup(){for(const remove of removers)remove();gesture=null;state.layer.style.visibility='visible';}};capture=active;
     listen(reader._iframeWindow,'keydown',key,true);listen(state.win,'keydown',key,true);
     listen(state.win,'blur',event=>{if(event.target===state.win)cancelCapture();});
     for(const view of views){
@@ -173,12 +176,12 @@ var ZEPins = {
   }
   function remember(reader,doc){
    if(documents.has(doc))return;
-   const unload=()=>{if(capture?.reader===reader)cancelCapture();for(const state of boards.values()){if(state.currentReader===reader)state.currentReader=null;for(const token of state.pending)if(token.reader===reader){token.cancelled=true;token.cancel?.();}}for(const node of doc.querySelectorAll?.('[data-ze-pin-control]')||[])node.remove();documents.delete(doc);};
+   const unload=()=>{if(capture?.reader===reader)cancelCapture();for(const state of sessions.values()){for(const token of state.pending)if(token.reader===reader){token.cancelled=true;token.cancel?.();state.pending.delete(token);}}for(const node of doc.querySelectorAll?.('[data-ze-pin-control]')||[])node.remove();documents.delete(doc);};
    doc.defaultView.addEventListener('unload',unload);documents.set(doc,{reader,unload});
   }
   function toolbar({reader,doc,append}){
    if(disposed||reader._type!=='pdf'||ZEPins.isTransient(reader)||reader._isUninitialized||doc.querySelector?.('[data-ze-pin-toolbar]'))return;
-   remember(reader,doc);const node=button(doc,'固定',()=>{const state=boards.get(owner(reader));if(capture?.reader===reader)cancelCapture();else if(state?.items.length){state.currentReader=reader;state.show();}else beginCapture(reader);});
+   remember(reader,doc);const node=button(doc,'固定',()=>beginCapture(reader));
    node.setAttribute('data-ze-pin-control','true');node.setAttribute('data-ze-pin-toolbar','true');node.title='临时固定公式或定义';node.className='toolbar-button';node.style.minWidth='38px';append(node);
   }
   function selection({reader,doc,params,append}){
@@ -190,8 +193,8 @@ var ZEPins = {
    start(){if(started||disposed)return;if(!Zotero.Reader?.registerEventListener)throw Error('阅读器扩展接口不可用');started=true;Zotero.Reader.registerEventListener('renderToolbar',toolbar,id);Zotero.Reader.registerEventListener('renderTextSelectionPopup',selection,id);
     for(const reader of Zotero.Reader._readers||[]){const doc=reader._iframeWindow?.document,target=doc?.querySelector('.toolbar .end .custom-sections')||doc?.querySelector('.toolbar .end');if(target)toolbar({reader,doc,append:node=>target.appendChild(node)});}
    },
-   releaseWindow(win){if(capture?.win===win)cancelCapture();boards.get(win)?.dispose();for(const [doc,state] of documents)if(owner(state.reader)===win){doc.defaultView.removeEventListener('unload',state.unload);state.unload();}},
-   dispose(){if(disposed)return;disposed=true;cancelCapture();for(const win of [...boards.keys()])boards.get(win).dispose();for(const [doc,state] of [...documents]){doc.defaultView.removeEventListener('unload',state.unload);state.unload();}if(started){Zotero.Reader.unregisterEventListener('renderToolbar',toolbar);Zotero.Reader.unregisterEventListener('renderTextSelectionPopup',selection);}started=false;}
+   releaseWindow(win){if(capture?.win===win)cancelCapture();sessions.get(win)?.dispose();for(const [doc,state] of documents)if(owner(state.reader)===win){doc.defaultView.removeEventListener('unload',state.unload);state.unload();}},
+   dispose(){if(disposed)return;disposed=true;cancelCapture();for(const win of [...sessions.keys()])sessions.get(win).dispose();for(const [doc,state] of [...documents]){doc.defaultView.removeEventListener('unload',state.unload);state.unload();}if(started){Zotero.Reader.unregisterEventListener('renderToolbar',toolbar);Zotero.Reader.unregisterEventListener('renderTextSelectionPopup',selection);}started=false;}
   };
  }
 };

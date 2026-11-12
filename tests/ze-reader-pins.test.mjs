@@ -82,6 +82,70 @@ function managerEnv(renderer){
  const fire=(type,extra={})=>{const appended=[];listeners.get(type)?.({reader,doc:frame.doc,params:{},append:node=>appended.push(node),...extra});return appended;};
  return {host,frame,pdf,Zotero,reader,manager,fire,listeners,opened,item,errors};
 }
+
+async function captureOnce(env,toolbar,x=100){
+ await toolbar.fire('click');const overlay=env.frame.root.querySelector('[data-ze-pin-overlay]');assert.ok(overlay,'each click must start a fresh capture');
+ await overlay.fire('pointerdown',{button:0,pointerId:1,clientX:x,clientY:100});
+ await overlay.fire('pointermove',{pointerId:1,clientX:x+100,clientY:200});
+ await overlay.fire('pointerup',{pointerId:1,clientX:x+100,clientY:200});await settle();
+}
+
+test('successive toolbar captures create independent images rather than a shared card list',async()=>{
+ const env=managerEnv();env.manager.start();const toolbar=env.fire('renderToolbar')[0];
+ await captureOnce(env,toolbar);await captureOnce(env,toolbar,220);
+ const images=env.host.root.querySelectorAll('[data-ze-pin-image]');assert.equal(images.length,2);
+ assert.notEqual(images[0],images[1]);assert.equal(images[0].querySelectorAll('img').length,1);assert.equal(images[1].querySelectorAll('img').length,1);
+ assert.equal(env.host.root.querySelector('section'),null);assert.equal(env.host.root.querySelector('panel'),null,'pins stay inside Zotero, not native always-on-top popups');
+ await images[0].querySelectorAll('button').find(x=>x.textContent==='关闭').fire('click');assert.equal(env.host.root.querySelectorAll('[data-ze-pin-image]').length,1);env.manager.dispose();
+});
+
+test('each bare image moves and zooms independently, and hover controls do not occupy image layout',async()=>{
+ const env=managerEnv();env.manager.start();const toolbar=env.fire('renderToolbar')[0];await captureOnce(env,toolbar);await captureOnce(env,toolbar,230);
+ const [first,second]=env.host.root.querySelectorAll('[data-ze-pin-image]'),image=first.querySelector('img'),actions=first.querySelector('[data-ze-pin-actions]');
+ const before={x:parseFloat(first.style.left),y:parseFloat(first.style.top),width:parseFloat(first.style.width)},secondBefore={...second.style};
+ assert.equal(actions.style.opacity,'0');await first.fire('pointerenter');assert.equal(actions.style.opacity,'1');await first.fire('pointerleave');assert.equal(actions.style.opacity,'0');
+ await image.fire('pointerdown',{button:0,pointerId:8,clientX:before.x+10,clientY:before.y+10});
+ await env.host.win.fire('pointermove',{pointerId:8,clientX:before.x-10,clientY:before.y+30});await env.host.win.fire('pointerup',{pointerId:8});
+ assert.equal(parseFloat(first.style.left),before.x-20);assert.equal(parseFloat(first.style.top),before.y+20);
+ await image.fire('wheel',{deltaY:-80,deltaX:0,deltaMode:0});assert.ok(parseFloat(first.style.width)>before.width);
+ assert.deepEqual(second.style,secondBefore);env.manager.dispose();assert.equal(env.host.root.querySelector('[data-ze-pin-layer]'),null);
+});
+
+test('existing images hide while selecting another region and reappear on Escape without being removed',async()=>{
+ const env=managerEnv();env.manager.start();const toolbar=env.fire('renderToolbar')[0];await captureOnce(env,toolbar);
+ const layer=env.host.root.querySelector('[data-ze-pin-layer]');assert.ok(layer);
+ await toolbar.fire('click');assert.equal(layer.style.visibility,'hidden');await env.pdf.win.fire('keydown',{key:'Escape'});
+ assert.equal(layer.style.visibility,'visible');assert.equal(layer.querySelectorAll('img').length,1);env.manager.dispose();
+});
+
+test('raising an older image preserves pointer capture throughout the drag',async()=>{
+ const env=managerEnv();env.manager.start();const toolbar=env.fire('renderToolbar')[0];await captureOnce(env,toolbar);await captureOnce(env,toolbar,220);
+ const layer=env.host.root.querySelector('[data-ze-pin-layer]'),node=layer.querySelector('[data-ze-pin-image]'),image=node.querySelector('img');let captured=false;
+ image.setPointerCapture=()=>{captured=true;};const append=layer.appendChild.bind(layer);
+ layer.appendChild=child=>{const result=append(child);if(captured){captured=false;void image.fire('lostpointercapture');}return result;};
+ const left=parseFloat(node.style.left),top=parseFloat(node.style.top);
+ await image.fire('pointerdown',{button:0,pointerId:1,clientX:left+10,clientY:top+10});
+ await env.host.win.fire('pointermove',{pointerId:1,clientX:left-10,clientY:top+20});
+ assert.equal(captured,true);assert.equal(parseFloat(node.style.left),left-20);env.manager.dispose();
+});
+
+test('closing a source reader frees cancelled render slots immediately for another PDF tab',async()=>{
+ const pending=[],env=managerEnv(()=>new Promise(resolve=>pending.push(resolve)));env.manager.start();const position={pageIndex:2,rects:[[0,0,20,20]]};
+ for(let i=0;i<3;i++)await env.fire('renderTextSelectionPopup',{params:{annotation:{position}}})[0].fire('click');
+ await env.frame.win.fire('unload');const next=windowDOM(),reader={...env.reader,_iframeWindow:next.win};
+ await env.fire('renderTextSelectionPopup',{reader,doc:next.doc,params:{annotation:{position}}})[0].fire('click');assert.equal(pending.length,4);
+ for(const release of pending.slice(0,3))release('data:image/png;base64,late');await settle();assert.equal(env.host.root.querySelectorAll('img').length,0);
+ env.manager.dispose();pending[3]('data:image/png;base64,late');await settle();assert.equal(env.host.root.querySelector('[data-ze-pin-layer]'),null);
+});
+
+test('three consecutive captures reach the limit; closing one frees a slot for the next capture',async()=>{
+ const env=managerEnv();env.manager.start();const toolbar=env.fire('renderToolbar')[0];
+ for(const x of [50,180,300])await captureOnce(env,toolbar,x);
+ assert.equal(env.host.root.querySelectorAll('[data-ze-pin-image]').length,3);
+ await toolbar.fire('click');assert.equal(env.frame.root.querySelector('[data-ze-pin-overlay]'),null);assert.match(env.host.root.textContent,/最多固定 3/);
+ const first=env.host.root.querySelector('[data-ze-pin-image]');await first.querySelectorAll('button').find(x=>x.textContent==='关闭').fire('click');
+ await captureOnce(env,toolbar,350);assert.equal(env.host.root.querySelectorAll('[data-ze-pin-image]').length,3);env.manager.dispose();
+});
 test('official reader hooks open region selection, Escape cancels it, and all resources are removed on stop',async()=>{
  const env=managerEnv();env.manager.start();assert.equal(env.listeners.size,2);
  const [button]=env.fire('renderToolbar');assert.ok(button);await button.fire('click');
@@ -118,7 +182,7 @@ test('region pointer events pin a PDF image without creating annotations; source
  assert.equal(env.frame.root.querySelector('[data-ze-pin-overlay]'),null);assert.ok(env.host.root.querySelector('img'));
  const buttons=env.host.root.querySelectorAll('button');await buttons.find(x=>x.textContent==='返回原文').fire('click');
  assert.equal(env.opened[0][0],42);assert.equal(env.opened[0][1].pageIndex,2);assert.equal(env.opened[0][1].position.pageIndex,2);
- await buttons.find(x=>x.textContent==='折叠').fire('click');assert.equal(env.host.root.querySelector('img').hidden,true);assert.equal(env.host.root.querySelector('img').style.display,'none');
+ assert.equal(env.host.root.querySelector('section'),null);assert.ok(env.host.root.querySelector('[data-ze-pin-image]'));
  env.manager.dispose();
 });
 test('three-pin limit includes pending renders, and disposed windows cannot receive late images',async()=>{
@@ -157,7 +221,7 @@ test('iframe offset and CSS scale map to the correct inner PDF region; moving th
  await env.fire('renderToolbar')[0].fire('click');let overlay=env.frame.root.querySelector('[data-ze-pin-overlay]');
  await overlay.fire('pointerdown',{button:0,pointerId:1,clientX:70,clientY:100});await overlay.fire('pointerup',{pointerId:1,clientX:145,clientY:175});await settle();
  assert.deepEqual(Array.from(positions[0].rects[0]),[100,550,250,700]);
- await env.host.root.querySelectorAll('button').find(x=>x.textContent==='框选').fire('click');overlay=env.frame.root.querySelector('[data-ze-pin-overlay]');
+ await env.fire('renderToolbar')[0].fire('click');overlay=env.frame.root.querySelector('[data-ze-pin-overlay]');
  await overlay.fire('pointerdown',{button:0,pointerId:1,clientX:70,clientY:100});box={...box,left:100};await overlay.fire('pointerup',{pointerId:1,clientX:145,clientY:175});
  assert.equal(positions.length,1);assert.match(env.host.root.textContent,/页面位置已变化/);env.manager.dispose();
 });
@@ -178,13 +242,27 @@ test('a pending or replaced PDF canvas does not prevent a visible drag rectangle
  assert.equal(regions.length,1);assert.deepEqual(Array.from(regions[0].rects[0]),[100,550,250,700]);env.manager.dispose();
 });
 
-test('card drag moves its native popup, folding changes actual display, and current PDF is used after a tab switch',async()=>{
+test('pinning after a PDF tab switch leaves existing images and captures the newly chosen reader',async()=>{
  const env=managerEnv();env.manager.start();await env.fire('renderTextSelectionPopup',{params:{annotation:{position:{pageIndex:2,rects:[[0,0,20,20]]}}}})[0].fire('click');await settle();
- const panel=env.host.root.querySelector('panel'),moves=[];panel.moveTo=(x,y)=>moves.push([x,y]);
- await env.host.root.querySelector('strong').fire('pointerdown',{button:0,pointerId:1,screenX:100,screenY:100});await env.host.win.fire('pointermove',{screenX:120,screenY:130});await env.host.win.fire('pointerup');
- assert.deepEqual(moves,[[panel.popupPoint.x+20,panel.popupPoint.y+30]]);
- env.host.win.Zotero_Tabs={selectedID:'other'};const other={...env.reader,_internalReader:{...env.reader._internalReader}};env.Zotero.Reader.getByTabID=id=>id==='other'?other:null;
- await env.host.root.querySelectorAll('button').find(x=>x.textContent==='框选').fire('click');assert.ok(env.frame.root.querySelector('[data-ze-pin-overlay]'));env.manager.dispose();
+ const oldImage=env.host.root.querySelector('img'),otherFrame=windowDOM(),other={...env.reader,_iframeWindow:otherFrame.win};
+ const toolbar=env.fire('renderToolbar',{reader:other,doc:otherFrame.doc})[0];await toolbar.fire('click');assert.ok(env.frame.root.querySelector('[data-ze-pin-overlay]'));
+ await env.pdf.win.fire('keydown',{key:'Escape'});assert.equal(env.host.root.querySelector('img'),oldImage);env.manager.dispose();
+});
+
+test('image aspect ratio follows decoded PNG dimensions and window resizing keeps it inside Zotero',async()=>{
+ const env=managerEnv();env.manager.start();await captureOnce(env,env.fire('renderToolbar')[0]);
+ const node=env.host.root.querySelector('[data-ze-pin-image]'),image=node.querySelector('img');image.naturalWidth=200;image.naturalHeight=600;await image.fire('load');
+ env.host.win.innerWidth=180;env.host.win.innerHeight=240;await env.host.win.fire('resize');
+ const width=parseFloat(node.style.width);assert.ok(width*3<=240);assert.ok(parseFloat(node.style.left)+width<=180);assert.ok(parseFloat(node.style.top)+width*3<=240);
+ await env.host.win.fire('unload');assert.equal(env.host.root.querySelector('[data-ze-pin-layer]'),null);env.manager.dispose();
+});
+
+test('closing one image while source I/O is pending cancels its late navigation',async()=>{
+ const env=managerEnv();env.manager.start();await captureOnce(env,env.fire('renderToolbar')[0]);let release;
+ env.item.fileExists=()=>new Promise(resolve=>release=resolve);
+ const node=env.host.root.querySelector('[data-ze-pin-image]'),buttons=node.querySelectorAll('button');
+ const navigating=buttons.find(x=>x.textContent==='返回原文').fire('click');await settle();await buttons.find(x=>x.textContent==='关闭').fire('click');release(true);await navigating;
+ assert.equal(env.opened.length,0);assert.equal(env.host.root.querySelectorAll('img').length,0);env.manager.dispose();
 });
 
 test('a source navigation waiting on I/O does not open another reader after plugin disposal',async()=>{

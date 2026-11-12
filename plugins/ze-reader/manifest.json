@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "ZE Reader",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "icons": {
     "32": "assets/icon.png",
     "64": "assets/icon.png",
